@@ -64,7 +64,17 @@ async function labeler() {
         );
       }
     } catch (error: any) {
+      core.debug(error);
+
       if (
+        error.name === 'HttpError' &&
+        error.message.includes('unauthorized')
+      ) {
+        core.error(
+          `Failed to set labels for PR #${pullRequest.number}. The workflow does not have permission to create labels. ` +
+            `Ensure the 'issues: write' permission is granted in the workflow file or manually create the missing labels in the repository.`
+        );
+      } else if (
         error.name !== 'HttpError' ||
         error.message !== 'Resource not accessible by integration'
       ) {
