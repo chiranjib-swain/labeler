@@ -258,14 +258,14 @@ jobs:
 
 ## Recommended Permissions
 
-In order to add labels to pull requests, the GitHub labeler action requires specific permissions depending on the scenario:
+To successfully add labels to pull requests using the GitHub Labeler Action, specific permissions must be granted based on your use case:
 
 1. **Adding Existing Labels**:
-   - Requires `pull-requests: write` permission.
-   - This is sufficient if all the labels specified in your `.github/labeler.yml` file already exist in the repository.
+   - Requires: `pull-requests: write`
+   - Use this if all labels already exist in the repository (i.e., pre-defined in .github/labeler.yml).
 
 2. **Creating New Labels**:
-   - Requires `issues: write` permission.
+   - Requires: `issues: write`
    - This is necessary if the action needs to create labels that do not already exist in the repository.
 
 However, when the action runs on a pull request from a forked repository, GitHub only grants read access tokens for `pull_request` events, at most. If you encounter an `Error: HttpError: Resource not accessible by integration`, it's likely due to these permission constraints. To resolve this issue, you can modify the `on:` section of your workflow to use
