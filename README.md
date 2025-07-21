@@ -284,7 +284,7 @@ To ensure the action works correctly, include the following permissions in your 
       issues: write
 ```
 
-## Manual Label Creation (Alternative to issues: write Permission)
+## Manual label creation (Alternative to `issues: write` permission)
 
 If you do not want to grant the `issues: write` permission, you can manually create the missing labels in the repository before running the action. The action will then only require `pull-requests: write` permission.
 
