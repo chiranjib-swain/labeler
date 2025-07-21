@@ -262,7 +262,7 @@ To successfully add labels to pull requests using the GitHub Labeler Action, spe
 
 1. **Adding Existing Labels**:
    - Requires: `pull-requests: write`
-   - Use this if all labels already exist in the repository (i.e., pre-defined in .github/labeler.yml).
+   - Use this if all labels already exist in the repository (i.e., pre-defined in `.github/labeler.yml`).
 
 2. **Creating New Labels**:
    - Requires: `issues: write`
@@ -284,9 +284,9 @@ To ensure the action works correctly, include the following permissions in your 
       issues: write
 ```
 
-## Manual label creation (Alternative to `issues: write` permission)
+## Manual label creation (Alternative to Granting `issues: write` Permission)
 
-If you do not want to grant the `issues: write` permission, you can manually create the missing labels in the repository before running the action. The action will then only require `pull-requests: write` permission.
+If you prefer not to grant the `issues: write` permission in your workflow, you can manually create all required labels in the repository before the action runs.
 
 ## Notes regarding `pull_request_target` event
 
