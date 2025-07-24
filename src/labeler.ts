@@ -84,7 +84,7 @@ async function labeler() {
           `Ensure the workflow file includes the required permissions. Alternatively, manually create the missing labels in the repository. ` +
           `For more information, refer to the action documentation: https://github.com/actions/labeler#recommended-permissions`,
         {
-          title: `Permission Issue: ${process.env['GITHUB_ACTION_REPOSITORY']} running under '${github.context.eventName}'`
+          title: `${process.env['GITHUB_ACTION_REPOSITORY']} running under '${github.context.eventName}' is misconfigured`
         }
       );
 
