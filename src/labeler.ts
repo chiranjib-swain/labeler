@@ -81,7 +81,6 @@ async function labeler() {
 
       core.warning(
         `The action requires 'issues: write' permission to create new labels or 'pull-requests: write' permission to add existing labels to pull requests. ` +
-          `Ensure the workflow file includes the required permissions. Alternatively, manually create the missing labels in the repository. ` +
           `For more information, refer to the action documentation: https://github.com/actions/labeler#recommended-permissions`,
         {
           title: `${process.env['GITHUB_ACTION_REPOSITORY']} running under '${github.context.eventName}' is misconfigured`
