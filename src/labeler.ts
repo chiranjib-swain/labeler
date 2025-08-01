@@ -64,6 +64,7 @@ async function labeler() {
         );
       }
     } catch (error: any) {
+      core.info(`Error Object : ${error}`);
       if (
         error.name === 'HttpError' &&
         error.message.includes('unauthorized')
