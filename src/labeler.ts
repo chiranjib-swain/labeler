@@ -18,7 +18,13 @@ const GITHUB_MAX_LABELS = 100;
 
 export const run = () =>
   labeler().catch(error => {
-    core.error(error);
+    // Skip logging if the error is already handled in the labeler function
+    if (
+      error.name !== 'HttpError' ||
+      (error.name === 'HttpError' && !error.message.includes('unauthorized'))
+    ) {
+      core.error(error); // Log only unexpected errors
+    }
     core.setFailed(error.message);
   });
 

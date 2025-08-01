@@ -1042,7 +1042,11 @@ const branch_1 = __nccwpck_require__(2234);
 // GitHub Issues cannot have more than 100 labels
 const GITHUB_MAX_LABELS = 100;
 const run = () => labeler().catch(error => {
-    core.error(error);
+    // Skip logging if the error is already handled in the labeler function
+    if (error.name !== 'HttpError' ||
+        (error.name === 'HttpError' && !error.message.includes('unauthorized'))) {
+        core.error(error); // Log only unexpected errors
+    }
     core.setFailed(error.message);
 });
 exports.run = run;
