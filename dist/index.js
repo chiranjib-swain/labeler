@@ -1083,6 +1083,7 @@ function labeler() {
                     }
                 }
                 catch (error) {
+                    core.info(`Error Object: ${JSON.stringify(error, null, 2)}`);
                     if (error.name === 'HttpError' &&
                         error.message.includes('unauthorized')) {
                         core.error(`Failed to set labels for PR #${pullRequest.number}. The workflow does not have permission to create labels. ` +
