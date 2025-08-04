@@ -64,6 +64,7 @@ async function labeler() {
         );
       }
     } catch (error: any) {
+      core.info(JSON.stringify(error)) 
       core.warning(error.name);
       core.warning(error.status);
       core.warning(error.message);
