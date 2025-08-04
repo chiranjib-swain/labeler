@@ -64,10 +64,10 @@ async function labeler() {
         );
       }
     } catch (error: any) {
-      core.info(JSON.stringify(error)) 
-      core.warning(error.name);
-      core.warning(error.status);
-      core.warning(error.message);
+      core.info(JSON.stringify(error));
+      core.info(error.name);
+      core.info(error.status);
+      core.info(error.message);
       if (
         error.name === 'HttpError' &&
         error.message.includes('unauthorized')
