@@ -64,6 +64,9 @@ async function labeler() {
         );
       }
     } catch (error: any) {
+      core.info(error.name);
+      core.info(error.status);
+      core.info(error.message);
       if (
         error.name === 'HttpError' &&
         error.message.includes('unauthorized')
