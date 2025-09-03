@@ -1083,9 +1083,12 @@ function labeler() {
                     }
                 }
                 catch (error) {
-                    core.debug(error);
+                    core.info(error.name);
+                    core.info(error.status);
+                    core.info(error.message);
                     if (error.name === 'HttpError' &&
-                        error.message.includes('unauthorized')) {
+                        error.status === 403 &&
+                        error.message.toLowerCase().includes('unauthorized')) {
                         core.error(`Failed to set labels for PR #${pullRequest.number}. The workflow does not have permission to create labels. ` +
                             `Ensure the 'issues: write' permission is granted in the workflow file or manually create the missing labels in the repository before running the action.`);
                     }
@@ -1093,13 +1096,15 @@ function labeler() {
                         error.message !== 'Resource not accessible by integration') {
                         throw error;
                     }
-                    core.warning(`The action requires 'issues: write' permission to create new labels or 'pull-requests: write' permission to add existing labels to pull requests. ` +
-                        `Ensure the workflow file includes the required permissions. Alternatively, manually create the missing labels in the repository. ` +
-                        `For more information, refer to the action documentation: https://github.com/actions/labeler#recommended-permissions`, {
-                        title: `Permission Issue: ${process.env['GITHUB_ACTION_REPOSITORY']} running under '${github.context.eventName}'`
-                    });
-                    core.setFailed(error.message);
-                    return;
+                    else {
+                        core.warning(`The action requires 'issues: write' permission to create new labels or 'pull-requests: write' permission to add existing labels to pull requests. ` +
+                            `Ensure the workflow file includes the required permissions. Alternatively, manually create the missing labels in the repository. ` +
+                            `For more information, refer to the action documentation: https://github.com/actions/labeler#recommended-permissions`, {
+                            title: `Permission Issue: ${process.env['GITHUB_ACTION_REPOSITORY']} running under '${github.context.eventName}'`
+                        });
+                        core.setFailed(error.message);
+                        return;
+                    }
                 }
                 core.setOutput('new-labels', newLabels.join(','));
                 core.setOutput('all-labels', labelsToAdd.join(','));
