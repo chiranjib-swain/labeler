@@ -21,6 +21,18 @@ inputs:
   pr-number:
     description: 'The pull request number(s)'
     required: false
+  debug-delay-before-fetch-ms:
+    description: 'Debug delay in ms before fetching PR labels'
+    required: false
+    default: '0'
+  debug-delay-before-set-ms:
+    description: 'Debug delay in ms before calling setLabels'
+    required: false
+    default: '0'
+  debug-delay-after-set-ms:
+    description: 'Debug delay in ms after calling setLabels'
+    required: false
+    default: '0'
 
 outputs:
   new-labels:

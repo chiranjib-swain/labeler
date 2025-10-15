@@ -16,6 +16,9 @@ type ClientType = ReturnType<typeof github.getOctokit>;
 // GitHub Issues cannot have more than 100 labels
 const GITHUB_MAX_LABELS = 100;
 
+const sleep = (ms: number) =>
+  new Promise<void>(resolve => setTimeout(resolve, ms));
+
 export const run = () =>
   labeler().catch(error => {
     core.error(error);
@@ -24,6 +27,28 @@ export const run = () =>
 
 export async function labeler() {
   const {token, configPath, syncLabels, dot, prNumbers} = getInputs();
+
+  // --- Debug delays (instrumentation) ---
+  const delayBeforeFetch = parseInt(
+    process.env['LABELER_DEBUG_DELAY_BEFORE_FETCH_MS'] || '0',
+    10
+  );
+  const delayBeforeSet = parseInt(
+    process.env['LABELER_DEBUG_DELAY_BEFORE_SET_MS'] || '0',
+    10
+  );
+  const delayAfterSet = parseInt(
+    process.env['LABELER_DEBUG_DELAY_AFTER_SET_MS'] || '0',
+    10
+  );
+
+  if (delayBeforeFetch > 0) {
+    core.warning(
+      `[debug] Sleeping ${delayBeforeFetch}ms before fetching PR data (enlarge window to add a label that will be REMOVED).`
+    );
+    await sleep(delayBeforeFetch);
+  }
+  // --------------------------------------
 
   if (!prNumbers.length) {
     core.warning('Could not get pull request number(s), exiting');
@@ -55,6 +80,13 @@ export async function labeler() {
     const excessLabels = [...allLabels].slice(GITHUB_MAX_LABELS);
 
     let newLabels: string[] = [];
+
+    if (delayBeforeSet > 0) {
+      core.warning(
+        `[debug] Sleeping ${delayBeforeSet}ms before setLabels call (window to add a label that will likely SURVIVE).`
+      );
+      await sleep(delayBeforeSet);
+    }
 
     try {
       if (!isEqual(labelsToAdd, preexistingLabels)) {
@@ -91,6 +123,13 @@ export async function labeler() {
       core.setFailed(error.message);
 
       return;
+    }
+
+    if (delayAfterSet > 0) {
+      core.warning(
+        `[debug] Sleeping ${delayAfterSet}ms after setLabels (post-observation window).`
+      );
+      await sleep(delayAfterSet);
     }
 
     core.setOutput('new-labels', newLabels.join(','));

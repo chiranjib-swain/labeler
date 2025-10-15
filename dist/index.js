@@ -873,7 +873,10 @@ const getInputs = () => ({
     configPath: core.getInput('configuration-path', { required: true }),
     syncLabels: core.getBooleanInput('sync-labels'),
     dot: core.getBooleanInput('dot'),
-    prNumbers: (0, get_pr_numbers_1.getPrNumbers)()
+    prNumbers: (0, get_pr_numbers_1.getPrNumbers)(),
+    debugDelayBeforeFetch: parseInt(core.getInput('debug-delay-before-fetch-ms') || '0', 10),
+    debugDelayBeforeSet: parseInt(core.getInput('debug-delay-before-set-ms') || '0', 10),
+    debugDelayAfterSet: parseInt(core.getInput('debug-delay-after-set-ms') || '0', 10)
 });
 exports.getInputs = getInputs;
 
@@ -1042,6 +1045,7 @@ const changedFiles_1 = __nccwpck_require__(5145);
 const branch_1 = __nccwpck_require__(2234);
 // GitHub Issues cannot have more than 100 labels
 const GITHUB_MAX_LABELS = 100;
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const run = () => labeler().catch(error => {
     core.error(error);
     core.setFailed(error.message);
@@ -1051,6 +1055,15 @@ function labeler() {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, e_1, _b, _c;
         const { token, configPath, syncLabels, dot, prNumbers } = (0, get_inputs_1.getInputs)();
+        // --- Debug delays (instrumentation) ---
+        const delayBeforeFetch = parseInt(process.env['LABELER_DEBUG_DELAY_BEFORE_FETCH_MS'] || '0', 10);
+        const delayBeforeSet = parseInt(process.env['LABELER_DEBUG_DELAY_BEFORE_SET_MS'] || '0', 10);
+        const delayAfterSet = parseInt(process.env['LABELER_DEBUG_DELAY_AFTER_SET_MS'] || '0', 10);
+        if (delayBeforeFetch > 0) {
+            core.warning(`[debug] Sleeping ${delayBeforeFetch}ms before fetching PR data (enlarge window to add a label that will be REMOVED).`);
+            yield sleep(delayBeforeFetch);
+        }
+        // --------------------------------------
         if (!prNumbers.length) {
             core.warning('Could not get pull request number(s), exiting');
             return;
@@ -1077,6 +1090,10 @@ function labeler() {
                 const labelsToAdd = [...allLabels].slice(0, GITHUB_MAX_LABELS);
                 const excessLabels = [...allLabels].slice(GITHUB_MAX_LABELS);
                 let newLabels = [];
+                if (delayBeforeSet > 0) {
+                    core.warning(`[debug] Sleeping ${delayBeforeSet}ms before setLabels call (window to add a label that will likely SURVIVE).`);
+                    yield sleep(delayBeforeSet);
+                }
                 try {
                     if (!(0, lodash_isequal_1.default)(labelsToAdd, preexistingLabels)) {
                         yield api.setLabels(client, pullRequest.number, labelsToAdd);
@@ -1100,6 +1117,10 @@ function labeler() {
                     });
                     core.setFailed(error.message);
                     return;
+                }
+                if (delayAfterSet > 0) {
+                    core.warning(`[debug] Sleeping ${delayAfterSet}ms after setLabels (post-observation window).`);
+                    yield sleep(delayAfterSet);
                 }
                 core.setOutput('new-labels', newLabels.join(','));
                 core.setOutput('all-labels', labelsToAdd.join(','));
