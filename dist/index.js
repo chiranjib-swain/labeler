@@ -1096,6 +1096,8 @@ function labeler() {
                 }
                 try {
                     if (!(0, lodash_isequal_1.default)(labelsToAdd, preexistingLabels)) {
+                        core.info(`[debug] Snapshot preexistingLabels: ${JSON.stringify(preexistingLabels)}`);
+                        core.info(`[debug] About to set labels: ${JSON.stringify(labelsToAdd)}`);
                         yield api.setLabels(client, pullRequest.number, labelsToAdd);
                         newLabels = labelsToAdd.filter(label => !preexistingLabels.includes(label));
                     }

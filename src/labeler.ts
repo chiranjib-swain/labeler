@@ -90,6 +90,12 @@ export async function labeler() {
 
     try {
       if (!isEqual(labelsToAdd, preexistingLabels)) {
+        core.info(
+          `[debug] Snapshot preexistingLabels: ${JSON.stringify(preexistingLabels)}`
+        );
+        core.info(
+          `[debug] About to set labels: ${JSON.stringify(labelsToAdd)}`
+        );
         await api.setLabels(client, pullRequest.number, labelsToAdd);
         newLabels = labelsToAdd.filter(
           label => !preexistingLabels.includes(label)
