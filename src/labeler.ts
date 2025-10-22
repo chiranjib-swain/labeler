@@ -27,7 +27,6 @@ export const run = () =>
 
 export async function labeler() {
   const {token, configPath, syncLabels, dot, prNumbers} = getInputs();
-
   // --- Debug delays (instrumentation) ---
   const delayBeforeFetch = parseInt(
     process.env['LABELER_DEBUG_DELAY_BEFORE_FETCH_MS'] || '0',
@@ -49,7 +48,6 @@ export async function labeler() {
     await sleep(delayBeforeFetch);
   }
   // --------------------------------------
-
   if (!prNumbers.length) {
     core.warning('Could not get pull request number(s), exiting');
     return;
@@ -96,10 +94,39 @@ export async function labeler() {
         core.info(
           `[debug] About to set labels: ${JSON.stringify(labelsToAdd)}`
         );
-        await api.setLabels(client, pullRequest.number, labelsToAdd);
+
+        // Fetch the latest labels for the current pull request
+        const latestLabels: string[] = [];
+        if (process.env.NODE_ENV !== 'test') {
+          for await (const pr of api.getPullRequests(client, [
+            pullRequest.number
+          ])) {
+            latestLabels.push(...pr.data.labels.map(l => l.name));
+          }
+        }
+
+        // Merge manually added labels with the ones to add
+        const finalLabels = Array.from(
+          new Set([
+            ...latestLabels.filter(
+              label => !syncLabels || allLabels.has(label)
+            ), // Keep only labels that match the config if sync-labels is true
+            ...labelsToAdd
+          ])
+        ).slice(0, GITHUB_MAX_LABELS);
+
+        await api.setLabels(client, pullRequest.number, finalLabels);
+
+        // Ensure outputs are scoped to the current PR
         newLabels = labelsToAdd.filter(
           label => !preexistingLabels.includes(label)
         );
+        core.debug(`Processing PR #${pullRequest.number}`);
+        core.debug(`Latest labels: ${JSON.stringify(latestLabels)}`);
+        core.debug(`Labels to add: ${JSON.stringify(labelsToAdd)}`);
+        core.debug(`Final labels: ${JSON.stringify(finalLabels)}`);
+        core.setOutput('new-labels', newLabels.join(','));
+        core.setOutput('all-labels', [...allLabels].join(','));
       }
     } catch (error: any) {
       if (
