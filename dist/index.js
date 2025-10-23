@@ -1121,7 +1121,7 @@ function labeler() {
                         }
                         // Merge manually added labels with the ones to add
                         const finalLabels = Array.from(new Set([
-                            ...latestLabels.filter(label => !allLabels.has(label)), // Include manually added labels not in the configuration
+                            ...latestLabels.filter(label => !preexistingLabels.includes(label)), // Include manually added labels not in the configuration
                             ...labelsToAdd // Include labels that match the configuration
                         ])).slice(0, GITHUB_MAX_LABELS);
                         yield api.setLabels(client, pullRequest.number, finalLabels);
