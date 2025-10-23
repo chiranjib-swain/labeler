@@ -1102,7 +1102,9 @@ function labeler() {
                         const latestLabels = [];
                         if (process.env.NODE_ENV !== 'test') {
                             try {
-                                for (var _h = true, _j = (e_2 = void 0, __asyncValues(api.getPullRequests(client, [pullRequest.number]))), _k; _k = yield _j.next(), _d = _k.done, !_d; _h = true) {
+                                for (var _h = true, _j = (e_2 = void 0, __asyncValues(api.getPullRequests(client, [
+                                    pullRequest.number
+                                ]))), _k; _k = yield _j.next(), _d = _k.done, !_d; _h = true) {
                                     _f = _k.value;
                                     _h = false;
                                     const pr = _f;
@@ -1119,8 +1121,8 @@ function labeler() {
                         }
                         // Merge manually added labels with the ones to add
                         const finalLabels = Array.from(new Set([
-                            ...latestLabels.filter(label => !syncLabels || allLabels.has(label)), // Keep only labels that match the config if sync-labels is true
-                            ...labelsToAdd
+                            ...latestLabels, // Include all manually added labels
+                            ...labelsToAdd.filter(label => !latestLabels.includes(label)) // Add only new labels
                         ])).slice(0, GITHUB_MAX_LABELS);
                         yield api.setLabels(client, pullRequest.number, finalLabels);
                         // Ensure outputs are scoped to the current PR
