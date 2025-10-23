@@ -108,8 +108,8 @@ export async function labeler() {
         // Merge manually added labels with the ones to add
         const finalLabels = Array.from(
           new Set([
-            ...latestLabels, // Include all manually added labels
-            ...labelsToAdd.filter(label => !latestLabels.includes(label)) // Add only new labels
+            ...latestLabels.filter(label => !allLabels.has(label)), // Include manually added labels not in the configuration
+            ...labelsToAdd // Include labels that match the configuration
           ])
         ).slice(0, GITHUB_MAX_LABELS);
 
