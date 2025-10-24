@@ -1089,6 +1089,7 @@ function labeler() {
                 }
                 const labelsToAdd = [...allLabels].slice(0, GITHUB_MAX_LABELS);
                 const excessLabels = [...allLabels].slice(GITHUB_MAX_LABELS);
+                let finalLabels = Array.from(new Set(labelsToAdd));
                 let newLabels = [];
                 if (delayBeforeSet > 0) {
                     core.warning(`[debug] Sleeping ${delayBeforeSet}ms before setLabels call (window to add a label that will likely SURVIVE).`);
@@ -1119,20 +1120,15 @@ function labeler() {
                                 finally { if (e_2) throw e_2.error; }
                             }
                         }
-                        // Merge manually added labels with the ones to add
-                        const finalLabels = Array.from(new Set([
-                            ...latestLabels.filter(label => !preexistingLabels.includes(label)), // Include manually added labels not in the configuration
-                            ...labelsToAdd // Include labels that match the configuration
-                        ])).slice(0, GITHUB_MAX_LABELS);
+                        // Merge manually added labels and config-matched labels
+                        const manuallyAdded = latestLabels.filter(l => !preexistingLabels.includes(l));
+                        finalLabels = Array.from(new Set([...manuallyAdded, ...labelsToAdd])).slice(0, GITHUB_MAX_LABELS);
                         yield api.setLabels(client, pullRequest.number, finalLabels);
-                        // Ensure outputs are scoped to the current PR
-                        newLabels = finalLabels.filter(label => !preexistingLabels.includes(label));
-                        core.debug(`Processing PR #${pullRequest.number}`);
+                        newLabels = finalLabels.filter(l => !preexistingLabels.includes(l));
+                        core.debug(`PR #${pullRequest.number}`);
                         core.debug(`Latest labels: ${JSON.stringify(latestLabels)}`);
-                        core.debug(`Labels to add: ${JSON.stringify(labelsToAdd)}`);
                         core.debug(`Final labels: ${JSON.stringify(finalLabels)}`);
                         core.setOutput('new-labels', newLabels.join(','));
-                        // core.setOutput('all-labels', [...allLabels].join(','));
                         core.setOutput('all-labels', finalLabels.join(','));
                     }
                 }
@@ -1159,7 +1155,7 @@ function labeler() {
                     yield sleep(delayAfterSet);
                 }
                 core.setOutput('new-labels', newLabels.join(','));
-                core.setOutput('all-labels', labelsToAdd.join(','));
+                core.setOutput('all-labels', finalLabels.join(','));
                 if (excessLabels.length) {
                     core.warning(`Maximum of ${GITHUB_MAX_LABELS} labels allowed. Excess labels: ${excessLabels.join(', ')}`, { title: 'Label limit for a PR exceeded' });
                 }
