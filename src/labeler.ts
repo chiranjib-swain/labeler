@@ -116,7 +116,7 @@ export async function labeler() {
         await api.setLabels(client, pullRequest.number, finalLabels);
 
         // Ensure outputs are scoped to the current PR
-        newLabels = labelsToAdd.filter(
+        newLabels = finalLabels.filter(
           label => !preexistingLabels.includes(label)
         );
         core.debug(`Processing PR #${pullRequest.number}`);
@@ -124,7 +124,8 @@ export async function labeler() {
         core.debug(`Labels to add: ${JSON.stringify(labelsToAdd)}`);
         core.debug(`Final labels: ${JSON.stringify(finalLabels)}`);
         core.setOutput('new-labels', newLabels.join(','));
-        core.setOutput('all-labels', [...allLabels].join(','));
+        // core.setOutput('all-labels', [...allLabels].join(','));
+        core.setOutput('all-labels', finalLabels.join(','));
       }
     } catch (error: any) {
       if (

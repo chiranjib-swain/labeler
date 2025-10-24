@@ -1126,13 +1126,14 @@ function labeler() {
                         ])).slice(0, GITHUB_MAX_LABELS);
                         yield api.setLabels(client, pullRequest.number, finalLabels);
                         // Ensure outputs are scoped to the current PR
-                        newLabels = labelsToAdd.filter(label => !preexistingLabels.includes(label));
+                        newLabels = finalLabels.filter(label => !preexistingLabels.includes(label));
                         core.debug(`Processing PR #${pullRequest.number}`);
                         core.debug(`Latest labels: ${JSON.stringify(latestLabels)}`);
                         core.debug(`Labels to add: ${JSON.stringify(labelsToAdd)}`);
                         core.debug(`Final labels: ${JSON.stringify(finalLabels)}`);
                         core.setOutput('new-labels', newLabels.join(','));
-                        core.setOutput('all-labels', [...allLabels].join(','));
+                        // core.setOutput('all-labels', [...allLabels].join(','));
+                        core.setOutput('all-labels', finalLabels.join(','));
                     }
                 }
                 catch (error) {
