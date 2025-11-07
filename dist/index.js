@@ -1087,19 +1087,19 @@ function labeler() {
                         allLabels.delete(label);
                     }
                 }
-                const labelsToAdd = [...allLabels].slice(0, GITHUB_MAX_LABELS);
+                const labelsToApply = [...allLabels].slice(0, GITHUB_MAX_LABELS);
                 const excessLabels = [...allLabels].slice(GITHUB_MAX_LABELS);
-                let finalLabels = Array.from(new Set(labelsToAdd));
+                let finalLabels = Array.from(new Set(labelsToApply));
                 let newLabels = [];
                 if (delayBeforeSet > 0) {
                     core.warning(`[debug] Sleeping ${delayBeforeSet}ms before setLabels call (window to add a label that will likely SURVIVE).`);
                     yield sleep(delayBeforeSet);
                 }
                 try {
-                    if (!(0, lodash_isequal_1.default)(labelsToAdd, preexistingLabels)) {
+                    if (!(0, lodash_isequal_1.default)(labelsToApply, preexistingLabels)) {
                         core.info(`[debug] Snapshot preexistingLabels: ${JSON.stringify(preexistingLabels)}`);
-                        core.info(`[debug] About to set labels: ${JSON.stringify(labelsToAdd)}`);
-                        // Fetch the latest labels for the current pull request
+                        core.info(`[debug] About to set labels: ${JSON.stringify(labelsToApply)}`);
+                        // Fetch the latest labels for the PR
                         const latestLabels = [];
                         if (process.env.NODE_ENV !== 'test') {
                             try {
@@ -1120,16 +1120,17 @@ function labeler() {
                                 finally { if (e_2) throw e_2.error; }
                             }
                         }
-                        // Merge manually added labels and config-matched labels
-                        const manuallyAdded = latestLabels.filter(l => !preexistingLabels.includes(l));
-                        finalLabels = Array.from(new Set([...manuallyAdded, ...labelsToAdd])).slice(0, GITHUB_MAX_LABELS);
+                        // Detect manually added labels during run
+                        const manualAddedDuringRun = latestLabels.filter(l => !preexistingLabels.includes(l));
+                        // Merge manual and config-based labels (dedupe + limit)
+                        finalLabels = [
+                            ...new Set([...manualAddedDuringRun, ...labelsToApply])
+                        ].slice(0, GITHUB_MAX_LABELS);
                         yield api.setLabels(client, pullRequest.number, finalLabels);
                         newLabels = finalLabels.filter(l => !preexistingLabels.includes(l));
                         core.debug(`PR #${pullRequest.number}`);
                         core.debug(`Latest labels: ${JSON.stringify(latestLabels)}`);
                         core.debug(`Final labels: ${JSON.stringify(finalLabels)}`);
-                        core.setOutput('new-labels', newLabels.join(','));
-                        core.setOutput('all-labels', finalLabels.join(','));
                     }
                 }
                 catch (error) {
