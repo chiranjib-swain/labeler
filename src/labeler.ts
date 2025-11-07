@@ -16,6 +16,9 @@ type ClientType = ReturnType<typeof github.getOctokit>;
 // GitHub Issues cannot have more than 100 labels
 const GITHUB_MAX_LABELS = 100;
 
+const sleep = (ms: number) =>
+  new Promise<void>(resolve => setTimeout(resolve, ms));
+
 export const run = () =>
   labeler().catch(error => {
     core.error(error);
@@ -24,7 +27,27 @@ export const run = () =>
 
 export async function labeler() {
   const {token, configPath, syncLabels, dot, prNumbers} = getInputs();
+  // --- Debug delays (instrumentation) ---
+  const delayBeforeFetch = parseInt(
+    process.env['LABELER_DEBUG_DELAY_BEFORE_FETCH_MS'] || '0',
+    10
+  );
+  const delayBeforeSet = parseInt(
+    process.env['LABELER_DEBUG_DELAY_BEFORE_SET_MS'] || '0',
+    10
+  );
+  const delayAfterSet = parseInt(
+    process.env['LABELER_DEBUG_DELAY_AFTER_SET_MS'] || '0',
+    10
+  );
 
+  if (delayBeforeFetch > 0) {
+    core.warning(
+      `[debug] Sleeping ${delayBeforeFetch}ms before fetching PR data (enlarge window to add a label that will be REMOVED).`
+    );
+    await sleep(delayBeforeFetch);
+  }
+  // --------------------------------------
   if (!prNumbers.length) {
     core.warning('Could not get pull request number(s), exiting');
     return;
@@ -51,17 +74,55 @@ export async function labeler() {
       }
     }
 
-    const labelsToAdd = [...allLabels].slice(0, GITHUB_MAX_LABELS);
+    const labelsToApply = [...allLabels].slice(0, GITHUB_MAX_LABELS);
     const excessLabels = [...allLabels].slice(GITHUB_MAX_LABELS);
 
+    let finalLabels = Array.from(new Set(labelsToApply));
     let newLabels: string[] = [];
 
+    if (delayBeforeSet > 0) {
+      core.warning(
+        `[debug] Sleeping ${delayBeforeSet}ms before setLabels call (window to add a label that will likely SURVIVE).`
+      );
+      await sleep(delayBeforeSet);
+    }
+
     try {
-      if (!isEqual(labelsToAdd, preexistingLabels)) {
-        await api.setLabels(client, pullRequest.number, labelsToAdd);
-        newLabels = labelsToAdd.filter(
-          label => !preexistingLabels.includes(label)
+      if (!isEqual(labelsToApply, preexistingLabels)) {
+        core.info(
+          `[debug] Snapshot preexistingLabels: ${JSON.stringify(preexistingLabels)}`
         );
+        core.info(
+          `[debug] About to set labels: ${JSON.stringify(labelsToApply)}`
+        );
+
+        // Fetch the latest labels for the PR
+        const latestLabels: string[] = [];
+        if (process.env.NODE_ENV !== 'test') {
+          for await (const pr of api.getPullRequests(client, [
+            pullRequest.number
+          ])) {
+            latestLabels.push(...pr.data.labels.map(l => l.name));
+          }
+        }
+
+        // Detect manually added labels during run
+        const manualAddedDuringRun = latestLabels.filter(
+          l => !preexistingLabels.includes(l)
+        );
+
+        // Merge manual and config-based labels (dedupe + limit)
+        finalLabels = [
+          ...new Set([...manualAddedDuringRun, ...labelsToApply])
+        ].slice(0, GITHUB_MAX_LABELS);
+
+        await api.setLabels(client, pullRequest.number, finalLabels);
+
+        newLabels = finalLabels.filter(l => !preexistingLabels.includes(l));
+
+        core.debug(`PR #${pullRequest.number}`);
+        core.debug(`Latest labels: ${JSON.stringify(latestLabels)}`);
+        core.debug(`Final labels: ${JSON.stringify(finalLabels)}`);
       }
     } catch (error: any) {
       if (
@@ -93,8 +154,15 @@ export async function labeler() {
       return;
     }
 
+    if (delayAfterSet > 0) {
+      core.warning(
+        `[debug] Sleeping ${delayAfterSet}ms after setLabels (post-observation window).`
+      );
+      await sleep(delayAfterSet);
+    }
+
     core.setOutput('new-labels', newLabels.join(','));
-    core.setOutput('all-labels', labelsToAdd.join(','));
+    core.setOutput('all-labels', finalLabels.join(','));
 
     if (excessLabels.length) {
       core.warning(
