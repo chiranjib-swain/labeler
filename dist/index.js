@@ -1053,7 +1053,7 @@ const run = () => labeler().catch(error => {
 exports.run = run;
 function labeler() {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, e_1, _b, _c, _d, e_2, _e, _f;
+        var _a, e_1, _b, _c;
         const { token, configPath, syncLabels, dot, prNumbers } = (0, get_inputs_1.getInputs)();
         // --- Debug delays (instrumentation) ---
         const delayBeforeFetch = parseInt(process.env['LABELER_DEBUG_DELAY_BEFORE_FETCH_MS'] || '0', 10);
@@ -1071,9 +1071,9 @@ function labeler() {
         const client = github.getOctokit(token, {}, pluginRetry.retry);
         const pullRequests = api.getPullRequests(client, prNumbers);
         try {
-            for (var _g = true, pullRequests_1 = __asyncValues(pullRequests), pullRequests_1_1; pullRequests_1_1 = yield pullRequests_1.next(), _a = pullRequests_1_1.done, !_a; _g = true) {
+            for (var _d = true, pullRequests_1 = __asyncValues(pullRequests), pullRequests_1_1; pullRequests_1_1 = yield pullRequests_1.next(), _a = pullRequests_1_1.done, !_a; _d = true) {
                 _c = pullRequests_1_1.value;
-                _g = false;
+                _d = false;
                 const pullRequest = _c;
                 const labelConfigs = yield api.getLabelConfigs(client, configPath);
                 const preexistingLabels = pullRequest.data.labels.map(l => l.name);
@@ -1102,29 +1102,15 @@ function labeler() {
                         // Fetch the latest labels for the PR
                         const latestLabels = [];
                         if (process.env.NODE_ENV !== 'test') {
-                            try {
-                                for (var _h = true, _j = (e_2 = void 0, __asyncValues(api.getPullRequests(client, [
-                                    pullRequest.number
-                                ]))), _k; _k = yield _j.next(), _d = _k.done, !_d; _h = true) {
-                                    _f = _k.value;
-                                    _h = false;
-                                    const pr = _f;
-                                    latestLabels.push(...pr.data.labels.map(l => l.name));
-                                }
-                            }
-                            catch (e_2_1) { e_2 = { error: e_2_1 }; }
-                            finally {
-                                try {
-                                    if (!_h && !_d && (_e = _j.return)) yield _e.call(_j);
-                                }
-                                finally { if (e_2) throw e_2.error; }
-                            }
+                            const pr = yield client.rest.pulls.get(Object.assign(Object.assign({}, github.context.repo), { pull_number: pullRequest.number }));
+                            latestLabels.push(...pr.data.labels.map(l => l.name));
                         }
                         // Detect manually added labels during run
                         const manualAddedDuringRun = latestLabels.filter(l => !preexistingLabels.includes(l));
                         // Merge manual and config-based labels (dedupe + limit)
-                        finalLabels = [...new Set([...manualAddedDuringRun, ...labelsToApply])]
-                            .slice(0, GITHUB_MAX_LABELS);
+                        finalLabels = [
+                            ...new Set([...manualAddedDuringRun, ...labelsToApply])
+                        ].slice(0, GITHUB_MAX_LABELS);
                         yield api.setLabels(client, pullRequest.number, finalLabels);
                         newLabels = finalLabels.filter(l => !preexistingLabels.includes(l));
                         core.debug(`PR #${pullRequest.number}`);
@@ -1164,7 +1150,7 @@ function labeler() {
         catch (e_1_1) { e_1 = { error: e_1_1 }; }
         finally {
             try {
-                if (!_g && !_a && (_b = pullRequests_1.return)) yield _b.call(pullRequests_1);
+                if (!_d && !_a && (_b = pullRequests_1.return)) yield _b.call(pullRequests_1);
             }
             finally { if (e_1) throw e_1.error; }
         }
