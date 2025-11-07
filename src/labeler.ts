@@ -99,11 +99,11 @@ export async function labeler() {
         // Fetch the latest labels for the PR
         const latestLabels: string[] = [];
         if (process.env.NODE_ENV !== 'test') {
-          for await (const pr of api.getPullRequests(client, [
-            pullRequest.number
-          ])) {
-            latestLabels.push(...pr.data.labels.map(l => l.name));
-          }
+          const pr = await client.rest.pulls.get({
+            ...github.context.repo,
+            pull_number: pullRequest.number
+          });
+          latestLabels.push(...pr.data.labels.map(l => l.name));
         }
 
         // Detect manually added labels during run
