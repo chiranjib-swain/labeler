@@ -74,10 +74,10 @@ export async function labeler() {
       }
     }
 
-    const labelsToAdd = [...allLabels].slice(0, GITHUB_MAX_LABELS);
+    const labelsToApply = [...allLabels].slice(0, GITHUB_MAX_LABELS);
     const excessLabels = [...allLabels].slice(GITHUB_MAX_LABELS);
 
-    let finalLabels = Array.from(new Set(labelsToAdd));
+    let finalLabels = Array.from(new Set(labelsToApply));
     let newLabels: string[] = [];
 
     if (delayBeforeSet > 0) {
@@ -88,15 +88,15 @@ export async function labeler() {
     }
 
     try {
-      if (!isEqual(labelsToAdd, preexistingLabels)) {
+      if (!isEqual(labelsToApply, preexistingLabels)) {
         core.info(
           `[debug] Snapshot preexistingLabels: ${JSON.stringify(preexistingLabels)}`
         );
         core.info(
-          `[debug] About to set labels: ${JSON.stringify(labelsToAdd)}`
+          `[debug] About to set labels: ${JSON.stringify(labelsToApply)}`
         );
 
-        // Fetch the latest labels for the current pull request
+        // Fetch the latest labels for the PR
         const latestLabels: string[] = [];
         if (process.env.NODE_ENV !== 'test') {
           for await (const pr of api.getPullRequests(client, [
@@ -106,13 +106,15 @@ export async function labeler() {
           }
         }
 
-        // Merge manually added labels and config-matched labels
-        const manuallyAdded = latestLabels.filter(
+        // Detect manually added labels during run
+        const manualAddedDuringRun = latestLabels.filter(
           l => !preexistingLabels.includes(l)
         );
-        finalLabels = Array.from(
-          new Set([...manuallyAdded, ...labelsToAdd])
-        ).slice(0, GITHUB_MAX_LABELS);
+
+        // Merge manual and config-based labels (dedupe + limit)
+        finalLabels = [
+          ...new Set([...manualAddedDuringRun, ...labelsToApply])
+        ].slice(0, GITHUB_MAX_LABELS);
 
         await api.setLabels(client, pullRequest.number, finalLabels);
 
@@ -121,9 +123,6 @@ export async function labeler() {
         core.debug(`PR #${pullRequest.number}`);
         core.debug(`Latest labels: ${JSON.stringify(latestLabels)}`);
         core.debug(`Final labels: ${JSON.stringify(finalLabels)}`);
-
-        core.setOutput('new-labels', newLabels.join(','));
-        core.setOutput('all-labels', finalLabels.join(','));
       }
     } catch (error: any) {
       if (
