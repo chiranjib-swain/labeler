@@ -6,7 +6,7 @@ export const setLabels = async (
   prNumber: number,
   labels: string[]
 ) => {
-  await client.rest.issues.setLabels({
+  await client.rest.issues.addLabels({
     owner: github.context.repo.owner,
     repo: github.context.repo.repo,
     issue_number: prNumber,
