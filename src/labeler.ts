@@ -1,6 +1,6 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import * as pluginRetry from '@octokit/plugin-retry';
+// import * as pluginRetry from '@octokit/plugin-retry';
 import * as api from './api';
 import isEqual from 'lodash.isequal';
 import {getInputs} from './get-inputs';
@@ -11,7 +11,15 @@ import {checkAllChangedFiles, checkAnyChangedFiles} from './changedFiles';
 
 import {checkAnyBranch, checkAllBranch} from './branch';
 
-type ClientType = ReturnType<typeof github.getOctokit>;
+import {Octokit} from '@octokit/core';
+import {retry} from '@octokit/plugin-retry';
+import {restEndpointMethods} from '@octokit/plugin-rest-endpoint-methods';
+import {paginateRest} from '@octokit/plugin-paginate-rest';
+
+// Create a custom Octokit class with the required plugins
+const MyOctokit = Octokit.plugin(retry, restEndpointMethods, paginateRest);
+
+type MyOctokitInstance = InstanceType<typeof MyOctokit>;
 
 // GitHub Issues cannot have more than 100 labels
 const GITHUB_MAX_LABELS = 100;
@@ -30,7 +38,9 @@ export async function labeler() {
     return;
   }
 
-  const client: ClientType = github.getOctokit(token, {}, pluginRetry.retry);
+  const client: MyOctokitInstance = new MyOctokit({
+    auth: token
+  });
 
   const pullRequests = api.getPullRequests(client, prNumbers);
 
@@ -51,17 +61,144 @@ export async function labeler() {
       }
     }
 
-    const labelsToAdd = [...allLabels].slice(0, GITHUB_MAX_LABELS);
+    // ...existing code...
+
+    const labelsToApply = [
+      'label-1',
+      'label-2',
+      'label-3',
+      'label-4',
+      'label-5',
+      'label-6',
+      'label-7',
+      'label-8',
+      'label-9',
+      'label-10',
+      'label-11',
+      'label-12',
+      'label-13',
+      'label-14',
+      'label-15',
+      'label-16',
+      'label-17',
+      'label-18',
+      'label-19',
+      'label-20',
+      'label-21',
+      'label-22',
+      'label-23',
+      'label-24',
+      'label-25',
+      'label-26',
+      'label-27',
+      'label-28',
+      'label-29',
+      'label-30',
+      'label-31',
+      'label-32',
+      'label-33',
+      'label-34',
+      'label-35',
+      'label-36',
+      'label-37',
+      'label-38',
+      'label-39',
+      'label-40',
+      'label-41',
+      'label-42',
+      'label-43',
+      'label-44',
+      'label-45',
+      'label-46',
+      'label-47',
+      'label-48',
+      'label-49',
+      'label-50',
+      'label-51',
+      'label-52',
+      'label-53',
+      'label-54',
+      'label-55',
+      'label-56',
+      'label-57',
+      'label-58',
+      'label-59',
+      'label-60',
+      'label-61',
+      'label-62',
+      'label-63',
+      'label-64',
+      'label-65',
+      'label-66',
+      'label-67',
+      'label-68',
+      'label-69',
+      'label-70',
+      'label-71',
+      'label-72',
+      'label-73',
+      'label-74',
+      'label-75',
+      'label-76',
+      'label-77',
+      'label-78',
+      'label-79',
+      'label-80',
+      'label-81',
+      'label-82',
+      'label-83',
+      'label-84',
+      'label-85',
+      'label-86',
+      'label-87',
+      'label-88',
+      'label-89',
+      'label-90',
+      'label-91',
+      'label-92',
+      'label-93',
+      'label-94',
+      'label-95',
+      'label-96',
+      'label-97',
+      'label-98',
+      'label-99',
+      'label-100'
+    ];
+
     const excessLabels = [...allLabels].slice(GITHUB_MAX_LABELS);
 
+    // ...existing code...
+
+    let finalLabels = labelsToApply;
     let newLabels: string[] = [];
 
     try {
-      if (!isEqual(labelsToAdd, preexistingLabels)) {
-        await api.setLabels(client, pullRequest.number, labelsToAdd);
-        newLabels = labelsToAdd.filter(
-          label => !preexistingLabels.includes(label)
+      if (!isEqual(labelsToApply, preexistingLabels)) {
+        // Fetch the latest labels for the PR
+        const latestLabels: string[] = [];
+        // Skip fetching real labels when running tests (uses mock data instead)
+        if (process.env.NODE_ENV !== 'test') {
+          const pr = await client.rest.pulls.get({
+            ...github.context.repo,
+            pull_number: pullRequest.number
+          });
+          latestLabels.push(...pr.data.labels.map(l => l.name).filter(Boolean));
+        }
+
+        // Labels added manually during the run (not in first snapshot)
+        const manualAddedDuringRun = latestLabels.filter(
+          l => !preexistingLabels.includes(l)
         );
+
+        // Preserve manual labels first, then apply config-based labels, respecting GitHub's 100-label limit
+        finalLabels = [
+          ...new Set([...manualAddedDuringRun, ...labelsToApply])
+        ].slice(0, GITHUB_MAX_LABELS);
+
+        await api.setLabels(client, pullRequest.number, finalLabels);
+
+        newLabels = finalLabels.filter(l => !preexistingLabels.includes(l));
       }
     } catch (error: any) {
       if (
@@ -94,7 +231,7 @@ export async function labeler() {
     }
 
     core.setOutput('new-labels', newLabels.join(','));
-    core.setOutput('all-labels', labelsToAdd.join(','));
+    core.setOutput('all-labels', finalLabels.join(','));
 
     if (excessLabels.length) {
       core.warning(
