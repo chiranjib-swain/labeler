@@ -37,7 +37,8 @@ const yamlFixtures = {
   'branches.yml': fs.readFileSync('__tests__/fixtures/branches.yml'),
   'only_pdfs.yml': fs.readFileSync('__tests__/fixtures/only_pdfs.yml'),
   'not_supported.yml': fs.readFileSync('__tests__/fixtures/not_supported.yml'),
-  'any_and_all.yml': fs.readFileSync('__tests__/fixtures/any_and_all.yml')
+  'any_and_all.yml': fs.readFileSync('__tests__/fixtures/any_and_all.yml'),
+  'pr_title.yml': fs.readFileSync('__tests__/fixtures/pr_title.yml')
 };
 
 const configureInput = (
@@ -494,6 +495,85 @@ describe('run', () => {
       expect(coreSetFailedMock).toHaveBeenCalledWith(error.message);
     }
   );
+
+  it('adds labels based on PR title that matches the regexp pattern', async () => {
+    usingLabelerConfigYaml('pr_title.yml');
+    mockGitHubResponseChangedFiles('foo.txt');
+    getPullMock.mockResolvedValue(<any>{
+      data: {
+        labels: []
+      }
+    });
+    github.context.payload.pull_request!.title = 'feat: Add new feature';
+
+    await run();
+
+    expect(setLabelsMock).toHaveBeenCalledTimes(1);
+    expect(setLabelsMock).toHaveBeenCalledWith({
+      owner: 'monalisa',
+      repo: 'helloworld',
+      issue_number: 123,
+      labels: ['feature']
+    });
+  });
+
+  it('adds multiple labels based on PR title that matches different regexp patterns', async () => {
+    usingLabelerConfigYaml('pr_title.yml');
+    mockGitHubResponseChangedFiles('foo.txt');
+    getPullMock.mockResolvedValue(<any>{
+      data: {
+        labels: []
+      }
+    });
+    github.context.payload.pull_request!.title = 'docs: Update documentation';
+
+    await run();
+
+    expect(setLabelsMock).toHaveBeenCalledTimes(1);
+    expect(setLabelsMock).toHaveBeenCalledWith({
+      owner: 'monalisa',
+      repo: 'helloworld',
+      issue_number: 123,
+      labels: ['documentation']
+    });
+  });
+
+  it('(with sync-labels: true) removes labels when PR title no longer matches', async () => {
+    configureInput({'sync-labels': true});
+    usingLabelerConfigYaml('pr_title.yml');
+    mockGitHubResponseChangedFiles('foo.txt');
+    getPullMock.mockResolvedValue(<any>{
+      data: {
+        labels: [{name: 'feature'}]
+      }
+    });
+    github.context.payload.pull_request!.title = 'fix: Bug fix';
+
+    await run();
+
+    expect(setLabelsMock).toHaveBeenCalledTimes(1);
+    expect(setLabelsMock).toHaveBeenCalledWith({
+      owner: 'monalisa',
+      repo: 'helloworld',
+      issue_number: 123,
+      labels: ['bug']
+    });
+  });
+
+  it('does not add label when PR title does not match any pattern', async () => {
+    usingLabelerConfigYaml('pr_title.yml');
+    mockGitHubResponseChangedFiles('foo.txt');
+    getPullMock.mockResolvedValue(<any>{
+      data: {
+        labels: []
+      }
+    });
+    github.context.payload.pull_request!.title = 'chore: Update dependencies';
+
+    await run();
+
+    expect(setLabelsMock).toHaveBeenCalledTimes(0);
+  });
 });
 
 function usingLabelerConfigYaml(fixtureName: keyof typeof yamlFixtures): void {

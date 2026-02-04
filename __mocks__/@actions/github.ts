@@ -2,6 +2,7 @@ export const context = {
   payload: {
     pull_request: {
       number: 123,
+      title: 'Test PR Title',
       head: {
         ref: 'head-branch-name'
       },

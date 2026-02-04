@@ -1,0 +1,6 @@
+feature:
+  - pr-title: '^feat:'
+bug:
+  - pr-title: '^fix:'
+documentation:
+  - pr-title: '^docs:'
