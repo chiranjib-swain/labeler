@@ -44,6 +44,7 @@ The base match object is defined as:
   - all-globs-to-all-files: ['list', 'of', 'globs']
 - base-branch: ['list', 'of', 'regexps']
 - head-branch: ['list', 'of', 'regexps']
+- pr-title: ['list', 'of', 'regexps']
 ```
 
 There are two top-level keys, `any` and `all`, which both accept the same configuration options:
@@ -56,6 +57,7 @@ There are two top-level keys, `any` and `all`, which both accept the same config
     - all-globs-to-all-files: ['list', 'of', 'globs']
   - base-branch: ['list', 'of', 'regexps']
   - head-branch: ['list', 'of', 'regexps']
+  - pr-title: ['list', 'of', 'regexps']
 - all:
   - changed-files:
     - any-glob-to-any-file: ['list', 'of', 'globs']
@@ -64,6 +66,7 @@ There are two top-level keys, `any` and `all`, which both accept the same config
     - all-globs-to-all-files: ['list', 'of', 'globs']
   - base-branch: ['list', 'of', 'regexps']
   - head-branch: ['list', 'of', 'regexps']
+  - pr-title: ['list', 'of', 'regexps']
 ```
 
 From a boolean logic perspective, top-level match objects, and options within `all` are `AND`-ed together and individual match rules within the `any` object are `OR`-ed.
@@ -74,6 +77,7 @@ The fields are defined as follows:
 - `any`: if ANY of the provided options match then the label will be applied
   - `base-branch`: match regexps against the base branch name
   - `head-branch`: match regexps against the head branch name
+  - `pr-title`: match regexps against the pull request title
   - `changed-files`: match glob patterns against the changed paths
     - `any-glob-to-any-file`: ANY glob must match against ANY changed file
     - `any-glob-to-all-files`: ANY glob must match against ALL changed files
@@ -151,6 +155,18 @@ feature:
 # Add 'release' label to any PR that is opened against the `main` branch
 release:
  - base-branch: 'main'
+
+# Add 'feature' label to any PR with a title starting with 'feat:' or 'feature:'
+feature:
+ - pr-title: ['^feat:', '^feature:']
+
+# Add 'bug' label to any PR with a title starting with 'fix:' or containing 'bug'
+bug:
+ - pr-title: ['^fix:', 'bug']
+
+# Add 'documentation' label to any PR with a title starting with 'docs:'
+documentation:
+ - pr-title: '^docs:'
 ```
 
 ### Create Workflow
@@ -171,6 +187,26 @@ jobs:
     steps:
     - uses: actions/labeler@v6
 ```
+
+> **Note:** If you are using `pr-title` matching and want labels to be updated when the PR title is edited, you should also trigger the workflow on `pull_request_target` events with the `edited` type:
+> 
+> ```yml
+> name: "Pull Request Labeler"
+> on:
+>   pull_request_target:
+>     types: [opened, synchronize, reopened, edited]
+> 
+> jobs:
+>   labeler:
+>     permissions:
+>       contents: read
+>       pull-requests: write
+>     runs-on: ubuntu-latest
+>     steps:
+>     - uses: actions/labeler@v6
+>       with:
+>         sync-labels: true
+> ```
 
 #### Inputs
 
