@@ -277,7 +277,13 @@ const fs_1 = __importDefault(__nccwpck_require__(9896));
 const get_content_1 = __nccwpck_require__(6519);
 const changedFiles_1 = __nccwpck_require__(5145);
 const branch_1 = __nccwpck_require__(2234);
-const ALLOWED_CONFIG_KEYS = ['changed-files', 'head-branch', 'base-branch'];
+const prTitle_1 = __nccwpck_require__(2224);
+const ALLOWED_CONFIG_KEYS = [
+    'changed-files',
+    'head-branch',
+    'base-branch',
+    'pr-title'
+];
 const getLabelConfigs = (client, configurationPath) => Promise.resolve()
     .then(() => {
     if (!fs_1.default.existsSync(configurationPath)) {
@@ -352,7 +358,8 @@ function getLabelConfigMapFromObject(configObject) {
 function toMatchConfig(config) {
     const changedFilesConfig = (0, changedFiles_1.toChangedFilesMatchConfig)(config);
     const branchConfig = (0, branch_1.toBranchMatchConfig)(config);
-    return Object.assign(Object.assign({}, changedFilesConfig), branchConfig);
+    const prTitleConfig = (0, prTitle_1.toPrTitleMatchConfig)(config);
+    return Object.assign(Object.assign(Object.assign({}, changedFilesConfig), branchConfig), prTitleConfig);
 }
 
 
@@ -1040,6 +1047,7 @@ const lodash_isequal_1 = __importDefault(__nccwpck_require__(9471));
 const get_inputs_1 = __nccwpck_require__(1219);
 const changedFiles_1 = __nccwpck_require__(5145);
 const branch_1 = __nccwpck_require__(2234);
+const prTitle_1 = __nccwpck_require__(2224);
 // GitHub Issues cannot have more than 100 labels
 const GITHUB_MAX_LABELS = 100;
 const run = () => labeler().catch(error => {
@@ -1184,6 +1192,12 @@ function checkAny(matchConfigs, changedFiles, dot) {
                 return true;
             }
         }
+        if (matchConfig.prTitle) {
+            if ((0, prTitle_1.checkAnyPrTitle)(matchConfig.prTitle)) {
+                core.debug(`  "any" patterns matched`);
+                return true;
+            }
+        }
     }
     core.debug(`  "any" patterns did not match any configs`);
     return false;
@@ -1219,9 +1233,126 @@ function checkAll(matchConfigs, changedFiles, dot) {
                 return false;
             }
         }
+        if (matchConfig.prTitle) {
+            if (!(0, prTitle_1.checkAllPrTitle)(matchConfig.prTitle)) {
+                core.debug(`  "all" patterns did not match`);
+                return false;
+            }
+        }
     }
     core.debug(`  "all" patterns matched all configs`);
     return true;
+}
+
+
+/***/ }),
+
+/***/ 2224:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.toPrTitleMatchConfig = toPrTitleMatchConfig;
+exports.getPrTitle = getPrTitle;
+exports.checkAnyPrTitle = checkAnyPrTitle;
+exports.checkAllPrTitle = checkAllPrTitle;
+const core = __importStar(__nccwpck_require__(7484));
+const github = __importStar(__nccwpck_require__(3228));
+function toPrTitleMatchConfig(config) {
+    if (!config['pr-title']) {
+        return {};
+    }
+    const prTitleConfig = {
+        prTitle: config['pr-title']
+    };
+    if (typeof prTitleConfig.prTitle === 'string') {
+        prTitleConfig.prTitle = [prTitleConfig.prTitle];
+    }
+    return prTitleConfig;
+}
+function getPrTitle() {
+    const pullRequest = github.context.payload.pull_request;
+    if (!pullRequest) {
+        return undefined;
+    }
+    return pullRequest.title;
+}
+function checkAnyPrTitle(regexps) {
+    const prTitle = getPrTitle();
+    if (!prTitle) {
+        core.debug(`   no PR title`);
+        return false;
+    }
+    core.debug(`   checking "pr-title" pattern against "${prTitle}"`);
+    const matchers = regexps.map(regexp => new RegExp(regexp));
+    for (const matcher of matchers) {
+        if (matchPrTitlePattern(matcher, prTitle)) {
+            core.debug(`   "pr-title" patterns matched against "${prTitle}"`);
+            return true;
+        }
+    }
+    core.debug(`   "pr-title" patterns did not match against "${prTitle}"`);
+    return false;
+}
+function checkAllPrTitle(regexps) {
+    const prTitle = getPrTitle();
+    if (!prTitle) {
+        core.debug(`   cannot fetch PR title from the pull request`);
+        return false;
+    }
+    core.debug(`   checking "pr-title" pattern against "${prTitle}"`);
+    const matchers = regexps.map(regexp => new RegExp(regexp));
+    for (const matcher of matchers) {
+        if (!matchPrTitlePattern(matcher, prTitle)) {
+            core.debug(`   "pr-title" patterns did not match against "${prTitle}"`);
+            return false;
+        }
+    }
+    core.debug(`   "pr-title" patterns matched against "${prTitle}"`);
+    return true;
+}
+function matchPrTitlePattern(matcher, prTitle) {
+    core.debug(`    - ${matcher}`);
+    if (matcher.test(prTitle)) {
+        core.debug(`    "pr-title" pattern matched`);
+        return true;
+    }
+    core.debug(`    ${matcher} did not match`);
+    return false;
 }
 
 

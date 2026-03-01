@@ -1,0 +1,42 @@
+# Configuration for actions/labeler
+# This file demonstrates the pr-title matching feature
+
+# Apply labels based on PR title using regex patterns
+feature:
+  - pr-title: ['^feat:', '^feature:']
+
+bug:
+  - pr-title: ['^fix:', '^bug:']
+
+documentation:
+  - pr-title: '^docs:'
+
+refactor:
+  - pr-title: '^refactor:'
+
+test:
+  - pr-title: '^test:'
+
+chore:
+  - pr-title: '^chore:'
+
+# Combine pr-title with other matchers
+# Apply 'api-change' label if title mentions API and files in 'src/api/' are changed
+api-change:
+  - all:
+      - pr-title: 'API'
+      - changed-files:
+          - any-glob-to-any-file: 'src/api/**'
+
+# Apply labels based on file changes
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file: ['package.json', 'package-lock.json', 'yarn.lock']
+
+source:
+  - changed-files:
+      - any-glob-to-any-file: 'src/**'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: ['__tests__/**', '**/*.test.ts', '**/*.spec.ts']
