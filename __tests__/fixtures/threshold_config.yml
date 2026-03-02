@@ -1,0 +1,13 @@
+changed-files-max-files: 10
+changed-files-labels-limit: 2
+
+touched-a-pdf-file:
+- changed-files:
+  - any-glob-to-any-file: '**/*.pdf'
+
+touched-a-ts-file:
+- changed-files:
+  - any-glob-to-any-file: '**/*.ts'
+
+test-branch:
+- head-branch: '^test/'

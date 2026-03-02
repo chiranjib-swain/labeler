@@ -17,6 +17,7 @@ const existsSyncMock = jest.spyOn(fs, 'existsSync');
 const coreErrorMock = jest.spyOn(core, 'error');
 const coreWarningMock = jest.spyOn(core, 'warning');
 const coreSetFailedMock = jest.spyOn(core, 'setFailed');
+const coreInfoMock = jest.spyOn(core, 'info');
 const setOutputSpy = jest.spyOn(core, 'setOutput');
 
 class HttpError extends Error {
@@ -37,7 +38,10 @@ const yamlFixtures = {
   'branches.yml': fs.readFileSync('__tests__/fixtures/branches.yml'),
   'only_pdfs.yml': fs.readFileSync('__tests__/fixtures/only_pdfs.yml'),
   'not_supported.yml': fs.readFileSync('__tests__/fixtures/not_supported.yml'),
-  'any_and_all.yml': fs.readFileSync('__tests__/fixtures/any_and_all.yml')
+  'any_and_all.yml': fs.readFileSync('__tests__/fixtures/any_and_all.yml'),
+  'threshold_config.yml': fs.readFileSync(
+    '__tests__/fixtures/threshold_config.yml'
+  )
 };
 
 const configureInput = (
@@ -506,3 +510,123 @@ function mockGitHubResponseChangedFiles(...files: string[]): void {
   const returnValue = files.map(f => ({filename: f}));
   paginateMock.mockReturnValue(<any>returnValue);
 }
+
+describe('changed-files-max-files threshold', () => {
+  beforeEach(() => {
+    configureInput({});
+    usingLabelerConfigYaml('threshold_config.yml');
+  });
+
+  it('applies labels when changed files < max (3 files, max=10)', async () => {
+    mockGitHubResponseChangedFiles('foo.pdf', 'bar.pdf', 'baz.pdf');
+    getPullMock.mockResolvedValue(<any>{data: {labels: []}});
+    await run();
+    expect(setLabelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({labels: expect.arrayContaining(['touched-a-pdf-file'])})
+    );
+  });
+
+  it('skips changed-files labels when changed files >= max (10 files, max=10)', async () => {
+    mockGitHubResponseChangedFiles(
+      'f1.pdf', 'f2.pdf', 'f3.pdf', 'f4.pdf', 'f5.pdf',
+      'f6.pdf', 'f7.pdf', 'f8.pdf', 'f9.pdf', 'f10.pdf'
+    );
+    getPullMock.mockResolvedValue(<any>{data: {labels: []}});
+    await run();
+    // No changed-files labels should be applied
+    expect(setLabelsMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({labels: expect.arrayContaining(['touched-a-pdf-file'])})
+    );
+    expect(coreInfoMock).toHaveBeenCalledWith(
+      expect.stringContaining('Skipping changed-files labels: PR changed 10 files')
+    );
+  });
+
+  it('skips changed-files labels when changed files > max (11 files, max=10)', async () => {
+    mockGitHubResponseChangedFiles(
+      'f1.pdf', 'f2.pdf', 'f3.pdf', 'f4.pdf', 'f5.pdf',
+      'f6.pdf', 'f7.pdf', 'f8.pdf', 'f9.pdf', 'f10.pdf', 'f11.pdf'
+    );
+    getPullMock.mockResolvedValue(<any>{data: {labels: []}});
+    await run();
+    expect(setLabelsMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({labels: expect.arrayContaining(['touched-a-pdf-file'])})
+    );
+  });
+
+  it('still applies branch-based labels even when max-files exceeded', async () => {
+    github.context.payload.pull_request!.head = {ref: 'test/my-feature'};
+    mockGitHubResponseChangedFiles(
+      'f1.pdf', 'f2.pdf', 'f3.pdf', 'f4.pdf', 'f5.pdf',
+      'f6.pdf', 'f7.pdf', 'f8.pdf', 'f9.pdf', 'f10.pdf'
+    );
+    getPullMock.mockResolvedValue(<any>{data: {labels: []}});
+    await run();
+    expect(setLabelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({labels: expect.arrayContaining(['test-branch'])})
+    );
+    expect(setLabelsMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({labels: expect.arrayContaining(['touched-a-pdf-file'])})
+    );
+  });
+});
+
+describe('changed-files-labels-limit threshold', () => {
+  beforeEach(() => {
+    configureInput({});
+    usingLabelerConfigYaml('threshold_config.yml');
+  });
+
+  it('applies labels when matched labels <= limit (1 label, limit=2)', async () => {
+    mockGitHubResponseChangedFiles('foo.pdf');
+    getPullMock.mockResolvedValue(<any>{data: {labels: []}});
+    await run();
+    expect(setLabelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({labels: expect.arrayContaining(['touched-a-pdf-file'])})
+    );
+  });
+
+  it('applies labels when matched labels == limit (2 labels, limit=2)', async () => {
+    mockGitHubResponseChangedFiles('foo.pdf', 'bar.ts');
+    getPullMock.mockResolvedValue(<any>{data: {labels: []}});
+    await run();
+    expect(setLabelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.arrayContaining(['touched-a-pdf-file', 'touched-a-ts-file'])
+      })
+    );
+  });
+
+  it('skips all changed-files labels when matched labels > limit (3 labels would match, limit=2)', async () => {
+    // threshold_config.yml has limit=2 and 3 labels: touched-a-pdf-file, touched-a-ts-file,
+    // plus we use the fixture's test-branch (branch-only). Add a third changed-files label to
+    // exceed the limit by matching all three files.
+    // The fixture has only 2 changed-files labels, so override config to have 3.
+    reposMock.mockResolvedValue(<any>{
+      data: {
+        content: Buffer.from(
+          [
+            'changed-files-labels-limit: 2',
+            'label-a:',
+            '- changed-files:',
+            "  - any-glob-to-any-file: '**/*.pdf'",
+            'label-b:',
+            '- changed-files:',
+            "  - any-glob-to-any-file: '**/*.ts'",
+            'label-c:',
+            '- changed-files:',
+            "  - any-glob-to-any-file: '**/*.md'"
+          ].join('\n')
+        ),
+        encoding: 'utf8'
+      }
+    });
+    mockGitHubResponseChangedFiles('foo.pdf', 'bar.ts', 'baz.md');
+    getPullMock.mockResolvedValue(<any>{data: {labels: []}});
+    await run();
+    expect(setLabelsMock).not.toHaveBeenCalled();
+    expect(coreInfoMock).toHaveBeenCalledWith(
+      expect.stringContaining('Skipping changed-files labels: 3 labels matched')
+    );
+  });
+});

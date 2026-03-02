@@ -20,10 +20,79 @@ export type BaseMatchConfig = BranchMatchConfig & ChangedFilesMatchConfig;
 
 const ALLOWED_CONFIG_KEYS = ['changed-files', 'head-branch', 'base-branch'];
 
+export const THRESHOLD_CONFIG_KEYS = [
+  'changed-files-max-files',
+  'changed-files-labels-limit',
+  'changed-files-limit'
+] as const;
+
+export interface ChangedFilesThresholds {
+  maxFiles?: number;
+  labelsLimit?: number;
+}
+
+export interface LabelConfigsResult {
+  labelMap: Map<string, MatchConfig[]>;
+  thresholds: ChangedFilesThresholds;
+}
+
+function parseThresholdValue(key: string, value: any): number {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    throw new Error(
+      `Config option '${key}' must be a non-negative integer, got: ${JSON.stringify(value)}`
+    );
+  }
+  if (value < 0) {
+    throw new Error(
+      `Config option '${key}' must be a non-negative integer, got: ${value}`
+    );
+  }
+  return value;
+}
+
+export function parseChangedFilesThresholds(
+  configObject: any
+): ChangedFilesThresholds {
+  if (!configObject || typeof configObject !== 'object') {
+    return {};
+  }
+
+  const thresholds: ChangedFilesThresholds = {};
+
+  if ('changed-files-max-files' in configObject) {
+    thresholds.maxFiles = parseThresholdValue(
+      'changed-files-max-files',
+      configObject['changed-files-max-files']
+    );
+  }
+
+  const hasNewLimitKey = 'changed-files-labels-limit' in configObject;
+  if (hasNewLimitKey) {
+    thresholds.labelsLimit = parseThresholdValue(
+      'changed-files-labels-limit',
+      configObject['changed-files-labels-limit']
+    );
+  }
+
+  if ('changed-files-limit' in configObject) {
+    core.warning(
+      '`changed-files-limit` is deprecated; use `changed-files-labels-limit` instead.'
+    );
+    if (!hasNewLimitKey) {
+      thresholds.labelsLimit = parseThresholdValue(
+        'changed-files-limit',
+        configObject['changed-files-limit']
+      );
+    }
+  }
+
+  return thresholds;
+}
+
 export const getLabelConfigs = (
   client: ClientType,
   configurationPath: string
-): Promise<Map<string, MatchConfig[]>> =>
+): Promise<LabelConfigsResult> =>
   Promise.resolve()
     .then(() => {
       if (!fs.existsSync(configurationPath)) {
@@ -55,7 +124,9 @@ export const getLabelConfigs = (
       const configObject: any = yaml.load(configuration);
 
       // transform `any` => `Map<string,MatchConfig[]>` or throw if yaml is malformed:
-      return getLabelConfigMapFromObject(configObject);
+      const labelMap = getLabelConfigMapFromObject(configObject);
+      const thresholds = parseChangedFilesThresholds(configObject);
+      return {labelMap, thresholds};
     });
 
 export function getLabelConfigMapFromObject(
@@ -63,6 +134,10 @@ export function getLabelConfigMapFromObject(
 ): Map<string, MatchConfig[]> {
   const labelMap: Map<string, MatchConfig[]> = new Map();
   for (const label in configObject) {
+    // Skip threshold config keys — they are global options, not labels
+    if (THRESHOLD_CONFIG_KEYS.includes(label as (typeof THRESHOLD_CONFIG_KEYS)[number])) {
+      continue;
+    }
     const configOptions = configObject[label];
     if (
       !Array.isArray(configOptions) ||

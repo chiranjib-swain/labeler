@@ -4,11 +4,12 @@ import * as api from '../src/api';
 import {labeler} from '../src/labeler';
 import * as github from '@actions/github';
 import * as fs from 'fs';
-import {checkMatchConfigs} from '../src/labeler';
+import {checkMatchConfigs, labelHasChangedFilesRules} from '../src/labeler';
 import {
   MatchConfig,
   toMatchConfig,
   getLabelConfigMapFromObject,
+  parseChangedFilesThresholds,
   BaseMatchConfig
 } from '../src/api/get-label-configs';
 
@@ -183,9 +184,10 @@ describe('labeler error handling', () => {
       }
     ]);
 
-    (api.getLabelConfigs as jest.Mock).mockResolvedValue(
-      new Map([['new-label', ['dummy-config']]])
-    );
+    (api.getLabelConfigs as jest.Mock).mockResolvedValue({
+      labelMap: new Map([['new-label', ['dummy-config']]]),
+      thresholds: {}
+    });
 
     // Force match so "new-label" is always added
     jest.spyOn({checkMatchConfigs}, 'checkMatchConfigs').mockReturnValue(true);
@@ -231,5 +233,115 @@ describe('labeler error handling', () => {
       expect.any(Object)
     );
     expect(core.setFailed).toHaveBeenCalledWith(error.message);
+  });
+});
+
+describe('parseChangedFilesThresholds', () => {
+  it('returns empty thresholds when configObject is empty', () => {
+    expect(parseChangedFilesThresholds({})).toEqual({});
+  });
+
+  it('returns empty thresholds when configObject is null', () => {
+    expect(parseChangedFilesThresholds(null)).toEqual({});
+  });
+
+  it('parses changed-files-max-files', () => {
+    expect(
+      parseChangedFilesThresholds({'changed-files-max-files': 50})
+    ).toEqual({maxFiles: 50});
+  });
+
+  it('parses changed-files-labels-limit', () => {
+    expect(
+      parseChangedFilesThresholds({'changed-files-labels-limit': 10})
+    ).toEqual({labelsLimit: 10});
+  });
+
+  it('parses both thresholds together', () => {
+    expect(
+      parseChangedFilesThresholds({
+        'changed-files-max-files': 50,
+        'changed-files-labels-limit': 10
+      })
+    ).toEqual({maxFiles: 50, labelsLimit: 10});
+  });
+
+  it('accepts zero as a valid value', () => {
+    expect(
+      parseChangedFilesThresholds({'changed-files-max-files': 0})
+    ).toEqual({maxFiles: 0});
+    expect(
+      parseChangedFilesThresholds({'changed-files-labels-limit': 0})
+    ).toEqual({labelsLimit: 0});
+  });
+
+  it('throws on negative changed-files-max-files', () => {
+    expect(() =>
+      parseChangedFilesThresholds({'changed-files-max-files': -1})
+    ).toThrow(/non-negative integer/);
+  });
+
+  it('throws on negative changed-files-labels-limit', () => {
+    expect(() =>
+      parseChangedFilesThresholds({'changed-files-labels-limit': -1})
+    ).toThrow(/non-negative integer/);
+  });
+
+  it('throws on non-integer changed-files-max-files', () => {
+    expect(() =>
+      parseChangedFilesThresholds({'changed-files-max-files': 1.5})
+    ).toThrow(/non-negative integer/);
+  });
+
+  it('throws on string changed-files-labels-limit', () => {
+    expect(() =>
+      parseChangedFilesThresholds({'changed-files-labels-limit': 'ten'})
+    ).toThrow(/non-negative integer/);
+  });
+
+  it('uses changed-files-limit as deprecated alias and warns', () => {
+    const result = parseChangedFilesThresholds({'changed-files-limit': 5});
+    expect(result).toEqual({labelsLimit: 5});
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('deprecated')
+    );
+  });
+
+  it('prefers changed-files-labels-limit over deprecated changed-files-limit', () => {
+    const result = parseChangedFilesThresholds({
+      'changed-files-labels-limit': 10,
+      'changed-files-limit': 5
+    });
+    expect(result).toEqual({labelsLimit: 10});
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining('deprecated')
+    );
+  });
+});
+
+describe('labelHasChangedFilesRules', () => {
+  it('returns true when a config has changedFiles rules', () => {
+    const configs: MatchConfig[] = [
+      {any: [{changedFiles: [{anyGlobToAnyFile: ['*.ts']}]}]}
+    ];
+    expect(labelHasChangedFilesRules(configs)).toBe(true);
+  });
+
+  it('returns false when configs only have branch rules', () => {
+    const configs: MatchConfig[] = [
+      {any: [{headBranch: ['feature/*']}]}
+    ];
+    expect(labelHasChangedFilesRules(configs)).toBe(false);
+  });
+
+  it('returns false for empty configs', () => {
+    expect(labelHasChangedFilesRules([])).toBe(false);
+  });
+
+  it('returns true when changedFiles rules are in the all block', () => {
+    const configs: MatchConfig[] = [
+      {all: [{changedFiles: [{allGlobsToAllFiles: ['*.ts']}]}]}
+    ];
+    expect(labelHasChangedFilesRules(configs)).toBe(true);
   });
 });
