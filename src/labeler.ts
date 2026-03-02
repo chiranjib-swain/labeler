@@ -35,16 +35,55 @@ export async function labeler() {
   const pullRequests = api.getPullRequests(client, prNumbers);
 
   for await (const pullRequest of pullRequests) {
-    const labelConfigs: Map<string, MatchConfig[]> = await api.getLabelConfigs(
+    const {labelMap, thresholds} = await api.getLabelConfigs(
       client,
       configPath
     );
     const preexistingLabels = pullRequest.data.labels.map(l => l.name);
     const allLabels: Set<string> = new Set<string>(preexistingLabels);
 
-    for (const [label, configs] of labelConfigs.entries()) {
+    const totalChangedFiles = pullRequest.changedFiles.length;
+    let skipChangedFilesLabels = false;
+
+    // Gate 1: changed-files-max-files — skip when PR is too large
+    if (
+      thresholds.maxFiles !== undefined &&
+      totalChangedFiles >= thresholds.maxFiles
+    ) {
+      core.info(
+        `Skipping changed-files labels: PR changed ${totalChangedFiles} files (>= max ${thresholds.maxFiles}).`
+      );
+      skipChangedFilesLabels = true;
+    }
+
+    // Gate 2: changed-files-labels-limit — skip when too many labels would be added
+    if (!skipChangedFilesLabels && thresholds.labelsLimit !== undefined) {
+      let matchingChangedFilesCount = 0;
+      for (const [, configs] of labelMap.entries()) {
+        if (
+          labelHasChangedFilesRules(configs) &&
+          checkMatchConfigs(pullRequest.changedFiles, configs, dot)
+        ) {
+          matchingChangedFilesCount++;
+        }
+      }
+      if (matchingChangedFilesCount > thresholds.labelsLimit) {
+        core.info(
+          `Skipping changed-files labels: ${matchingChangedFilesCount} labels matched (> max ${thresholds.labelsLimit}).`
+        );
+        skipChangedFilesLabels = true;
+      }
+    }
+
+    for (const [label, configs] of labelMap.entries()) {
       core.debug(`processing ${label}`);
-      if (checkMatchConfigs(pullRequest.changedFiles, configs, dot)) {
+      const hasChangedFilesRules = labelHasChangedFilesRules(configs);
+      if (skipChangedFilesLabels && hasChangedFilesRules) {
+        // Treat as not matching due to threshold
+        if (syncLabels) {
+          allLabels.delete(label);
+        }
+      } else if (checkMatchConfigs(pullRequest.changedFiles, configs, dot)) {
         allLabels.add(label);
       } else if (syncLabels) {
         allLabels.delete(label);
@@ -255,4 +294,13 @@ export function checkAll(
 
   core.debug(`  "all" patterns matched all configs`);
   return true;
+}
+
+export function labelHasChangedFilesRules(configs: MatchConfig[]): boolean {
+  return configs.some(config => {
+    const entries = [...(config.any || []), ...(config.all || [])];
+    return entries.some(
+      entry => entry.changedFiles && entry.changedFiles.length > 0
+    );
+  });
 }

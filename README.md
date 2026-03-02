@@ -96,6 +96,49 @@ Documentation:
 
  If path globs are combined with `!` negation, you can write complex matching rules. See the examples below for more information.
 
+#### Size-of-change Thresholds
+
+Two optional global configuration keys let you gate `changed-files` labeling based on the size of a PR. These keys sit at the top level of your labeler config file alongside your label definitions.
+
+| Key | Description |
+|---|---|
+| `changed-files-max-files` | Maximum number of files a PR may change before **all** `changed-files` labels are skipped. Uses `>=` comparison: a PR that changes exactly `N` files is skipped. |
+| `changed-files-labels-limit` | Maximum number of `changed-files` labels that may be applied. If the number of matched labels would exceed this limit, **none** of the `changed-files` labels are applied (all-or-nothing). |
+
+> **Note:** Both thresholds affect only labels that have `changed-files` rules. Labels matched solely by `head-branch` or `base-branch` rules are never skipped.
+
+> **Deprecated:** `changed-files-limit` is a deprecated alias for `changed-files-labels-limit`. It continues to work but emits a warning. Please migrate to `changed-files-labels-limit`.
+
+##### Threshold semantics
+
+- **`changed-files-max-files`**: `total_files >= N` → skip all `changed-files` labels. Value `0` skips always. Value `1` effectively disables `changed-files` labeling (since PRs always have ≥ 1 changed file).
+- **`changed-files-labels-limit`**: `matched_labels > N` → skip all `changed-files` labels. Value `0` skips when any label would be matched.
+- When both are configured, `changed-files-max-files` is evaluated first. If it triggers, `changed-files-labels-limit` is not evaluated.
+- Non-integer or negative values are treated as configuration errors and fail the action.
+
+##### Threshold examples
+
+```yml
+# Skip file-based labels on large PRs (>= 50 changed files)
+changed-files-max-files: 50
+
+# Prevent label spam: skip changed-files labels if more than 10 would be added
+changed-files-labels-limit: 10
+
+# Label definitions follow as normal
+Documentation:
+- changed-files:
+  - any-glob-to-any-file: docs/**
+
+Tests:
+- changed-files:
+  - any-glob-to-any-file: '**/*.test.ts'
+
+# Branch-based labels are unaffected by both thresholds
+release:
+- base-branch: 'main'
+```
+
 #### Basic Examples
 
 ```yml
