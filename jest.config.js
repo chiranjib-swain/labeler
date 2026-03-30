@@ -4,7 +4,8 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/*.test.ts'],
   transform: {
-    '^.+\\.ts$': 'ts-jest'
+    '^.+\\.[jt]s$': 'ts-jest'
   },
+  transformIgnorePatterns: ['/node_modules/(?!@octokit/)'],
   verbose: true
 }
