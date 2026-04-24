@@ -1,16 +1,18 @@
 ---
 name: brace-expansion
-version: 2.1.0
+version: 5.0.5
 type: npm
 summary: Brace expansion as known from sh/bash
-homepage:
+homepage: https://github.com/juliangruber/brace-expansion
 license: mit
 licenses:
 - sources: LICENSE
   text: |
     MIT License
 
-    Copyright (c) 2013 Julian Gruber <julian@juliangruber.com>
+    Copyright Julian Gruber <julian@juliangruber.com>
+
+    TypeScript port Copyright Isaac Z. Schlueter <i@izs.me>
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
