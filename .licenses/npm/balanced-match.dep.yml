@@ -3,8 +3,8 @@ name: balanced-match
 version: 4.0.4
 type: npm
 summary: Match balanced character pairs, like "{" and "}"
-homepage:
-license: other
+homepage: https://github.com/juliangruber/balanced-match
+license: mit
 licenses:
 - sources: LICENSE.md
   text: |
