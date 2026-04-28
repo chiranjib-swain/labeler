@@ -15,3 +15,4 @@ reviewed:
     - balanced-match
     - brace-expansion
     - minimatch
+    - "@actions/http-client"
