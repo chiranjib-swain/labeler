@@ -1006,7 +1006,7 @@ const getPrNumbers = () => {
         if (isNaN(prNumber) || prNumber <= 0) {
             core.error(`'${line}' is not a valid pull request number`);
             core.setFailed(`Invalid pr-number input: '${line}'. All PR numbers must be positive integers.`);
-            // return []; // ← bail out entirely, process nothing
+            continue;
         }
         result.push(prNumber);
     }

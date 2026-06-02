@@ -21,7 +21,7 @@ export const getPrNumbers = (): number[] => {
       core.setFailed(
         `Invalid pr-number input: '${line}'. All PR numbers must be positive integers.`
       );
-      // return []; // ← bail out entirely, process nothing
+      continue;
     }
 
     result.push(prNumber);
