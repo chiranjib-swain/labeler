@@ -1004,8 +1004,8 @@ const getPrNumbers = () => {
     for (const line of prInput) {
         const prNumber = parseInt(line, 10);
         if (isNaN(prNumber) || prNumber <= 0) {
-            core.warning(`'${line}' is not a valid pull request number`);
-            continue;
+            core.error(`'${line}' is not a valid pull request number`); // ← warning → error
+            continue; // ← still continues!
         }
         result.push(prNumber);
     }
