@@ -4,6 +4,13 @@ import * as github from '@actions/github';
 const getPrNumberFromContext = () =>
   github.context.payload.pull_request?.number;
 
+export const sanitizeForWarning = (value: string): string => {
+  return value.replace(
+    /[\x00-\x1F\x7F-\x9F]/g,
+    c => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`
+  );
+};
+
 export const getPrNumbers = (): number[] => {
   const prInput = core.getMultilineInput('pr-number');
 
@@ -17,7 +24,9 @@ export const getPrNumbers = (): number[] => {
     const prNumber = parseInt(line, 10);
 
     if (isNaN(prNumber) || prNumber <= 0) {
-      core.warning(`'${line}' is not a valid pull request number`);
+      core.warning(
+        `'${JSON.stringify(line)}' is not a valid pull request number`
+      );
       continue;
     }
 
