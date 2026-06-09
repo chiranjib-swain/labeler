@@ -25,7 +25,7 @@ export const getPrNumbers = (): number[] => {
 
     if (isNaN(prNumber) || prNumber <= 0) {
       core.warning(
-        `'${JSON.stringify(line)}' is not a valid pull request number`
+        `'${sanitizeForWarning(line)}' is not a valid pull request number`
       );
       continue;
     }
