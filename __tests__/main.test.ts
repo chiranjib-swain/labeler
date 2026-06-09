@@ -495,6 +495,60 @@ describe('run', () => {
     expect(setLabelsMock).not.toHaveBeenCalled();
   });
 
+  it('(with pr-number: string with carriage return) sanitizes CR as \\x0d in warning', async () => {
+    configureInput({
+      'repo-token': 'foo',
+      'configuration-path': 'bar',
+      'pr-number': ['abc\rdef']
+    });
+
+    usingLabelerConfigYaml('only_pdfs.yml');
+
+    await run();
+
+    expect(coreWarningMock).toHaveBeenCalledWith(
+      "'abc\\x0ddef' is not a valid pull request number"
+    );
+    expect(getPullMock).not.toHaveBeenCalled();
+    expect(setLabelsMock).not.toHaveBeenCalled();
+  });
+
+  it('(with pr-number: string with tab) sanitizes tab as \\x09 in warning', async () => {
+    configureInput({
+      'repo-token': 'foo',
+      'configuration-path': 'bar',
+      'pr-number': ['abc\tdef']
+    });
+
+    usingLabelerConfigYaml('only_pdfs.yml');
+
+    await run();
+
+    expect(coreWarningMock).toHaveBeenCalledWith(
+      "'abc\\x09def' is not a valid pull request number"
+    );
+    expect(getPullMock).not.toHaveBeenCalled();
+    expect(setLabelsMock).not.toHaveBeenCalled();
+  });
+
+  it('(with pr-number: string with ANSI escape sequence) sanitizes ESC byte as \\x1b in warning', async () => {
+    configureInput({
+      'repo-token': 'foo',
+      'configuration-path': 'bar',
+      'pr-number': ['abc\x1b[31mINJECTED\x1b[0m']
+    });
+
+    usingLabelerConfigYaml('only_pdfs.yml');
+
+    await run();
+
+    expect(coreWarningMock).toHaveBeenCalledWith(
+      "'abc\\x1b[31mINJECTED\\x1b[0m' is not a valid pull request number"
+    );
+    expect(getPullMock).not.toHaveBeenCalled();
+    expect(setLabelsMock).not.toHaveBeenCalled();
+  });
+
   it('(with pr-number: mix of valid and invalid) processes valid, skips invalid with warning', async () => {
     configureInput({
       'repo-token': 'foo',
