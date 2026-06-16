@@ -1006,9 +1006,14 @@ const getPrNumbers = () => {
     }
     const result = [];
     for (const line of prInput) {
-        const prNumber = parseInt(line, 10);
-        if (isNaN(prNumber) || prNumber <= 0) {
-            core.warning(`'${(0, exports.sanitizeForWarning)(line)}' is not a valid pull request number`);
+        const trimmed = line.trim();
+        const prNumber = parseInt(trimmed, 10);
+        if (isNaN(prNumber) || prNumber <= 0 || String(prNumber) !== trimmed) {
+            const sanitized = (0, exports.sanitizeForWarning)(line);
+            const hint = sanitized !== line
+                ? ' (non-printable characters were escaped as \\xNN)'
+                : '';
+            core.warning(`'${sanitized}' is not a valid pull request number${hint}`);
             continue;
         }
         result.push(prNumber);
