@@ -45947,6 +45947,9 @@ var lodash_isequal = __nccwpck_require__(9471);
 
 
 const getPrNumberFromContext = () => github_context.payload.pull_request?.number;
+const sanitizeForWarning = (value) => {
+    return value.replace(/[\x00-\x1F\x7F-\x9F]/g, c => `\\x${c.charCodeAt(0).toString(16).padStart(2, '0')}`);
+};
 const getPrNumbers = () => {
     const prInput = getMultilineInput('pr-number');
     if (!prInput?.length) {
@@ -45954,9 +45957,14 @@ const getPrNumbers = () => {
     }
     const result = [];
     for (const line of prInput) {
-        const prNumber = parseInt(line, 10);
-        if (isNaN(prNumber) && prNumber <= 0) {
-            warning(`'${prNumber}' is not a valid pull request number`);
+        const trimmed = line.trim();
+        const prNumber = parseInt(trimmed, 10);
+        if (isNaN(prNumber) || prNumber <= 0 || String(prNumber) !== trimmed) {
+            const sanitized = sanitizeForWarning(line);
+            const hint = sanitized !== line
+                ? ' (non-printable characters were escaped as \\xNN)'
+                : '';
+            warning(`'${sanitized}' is not a valid pull request number${hint}`);
             continue;
         }
         result.push(prNumber);
