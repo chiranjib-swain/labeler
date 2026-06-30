@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "tsc && ncc build lib/main.js",
-    "format": "prettier --no-error-on-unmatched-pattern --config ./.prettierrc.cjs --write \"**/*.{ts,yml,yaml}\"",
-    "format-check": "prettier --no-error-on-unmatched-pattern --config ./.prettierrc.cjs --check \"**/*.{ts,yml,yaml}\"",
+    "format": "prettier --no-error-on-unmatched-pattern --write \"**/*.{ts,yml,yaml}\"",
+    "format-check": "prettier --no-error-on-unmatched-pattern --check \"**/*.{ts,yml,yaml}\"",
     "lint": "eslint \"**/*.ts\"",
     "lint:fix": "eslint \"**/*.ts\" --fix",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand"
@@ -36,6 +36,7 @@
     "minimatch": "^10.2.5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.4.1",
     "@types/jest": "^30.0.0",
     "@types/lodash.isequal": "^4.5.8",
@@ -48,7 +49,8 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jest": "^29.15.2",
     "eslint-plugin-n": "^18.1.0",
-    "jest": "^30.0.0",
+    "globals": "^17.7.0",
+    "jest": "^30.4.2",
     "prettier": "^3.8.4",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
