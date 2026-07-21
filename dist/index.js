@@ -44228,6 +44228,12 @@ async function labeler() {
         const finalLabels = labelsToApply;
         const newLabels = labelsToApply.filter(label => !preexistingLabels.includes(label));
         const staleLabels = pullRequest.data.labels.filter(label => labelConfigs.has(label.name) && !allLabels.has(label.name));
+        info(`[DEBUG] PR #${pullRequest.number} — preexistingLabels (${preexistingLabels.length}): ${preexistingLabels.join(', ')}`);
+        info(`[DEBUG] allLabels total: ${allLabels.size}`);
+        info(`[DEBUG] labelsToApply (${labelsToApply.length}): ${labelsToApply.join(', ')}`);
+        info(`[DEBUG] excessLabels (${excessLabels.length}): ${excessLabels.join(', ')}`);
+        info(`[DEBUG] newLabels to add (${newLabels.length}): ${newLabels.join(', ')}`);
+        info(`[DEBUG] staleLabels to remove (${staleLabels.length}): ${staleLabels.map(l => l.name).join(', ')}`);
         try {
             if (staleLabels.length) {
                 const labelableId = pullRequest.data.node_id;
@@ -44235,19 +44241,29 @@ async function labeler() {
                 if (!labelableId || missingNodeId) {
                     throw new Error(`Failed to resolve node IDs while removing configured labels from PR #${pullRequest.number}`);
                 }
+                info(`[DEBUG] Calling removeLabels for ${staleLabels.length} labels, labelableId: ${labelableId}`);
                 try {
                     await removeLabels(client, labelableId, staleLabels.map(label => label.node_id));
+                    info(`[DEBUG] removeLabels succeeded`);
                 }
                 catch (error) {
+                    info(`[DEBUG] removeLabels failed — status: ${error.status}, message: ${error.message}`);
                     throw new Error(`Failed to remove configured labels '${staleLabels.map(label => label.name).join("', '")}' from PR #${pullRequest.number}`, { cause: error });
                 }
             }
             if (newLabels.length) {
+                info(`[DEBUG] Calling addLabels with ${newLabels.length} labels`);
                 await addLabels(client, pullRequest.number, newLabels);
+                info(`[DEBUG] addLabels succeeded`);
+            }
+            else {
+                info(`[DEBUG] No new labels to add`);
             }
         }
         catch (error) {
             const apiError = error.cause ?? error;
+            info(`[DEBUG] Caught error — name: ${apiError.name}, status: ${apiError.status}, message: ${apiError.message}`);
+            info(`[DEBUG] Full error: ${JSON.stringify(apiError, Object.getOwnPropertyNames(apiError))}`);
             if (apiError.name === 'HttpError' &&
                 apiError.status === 403 &&
                 apiError.message.toLowerCase().includes('unauthorized')) {
