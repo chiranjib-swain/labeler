@@ -1,0 +1,9 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "base64": true,
+        "/^# Step 1: Update labeler\\.yml on main to also fire on feature/sync-limit\nCURRENT=\\$\\(gh api repos/chiranjib-swain/labeler-test/contents/\\.github/workflows/labeler\\.yml --jq '\\{sha: \\.sha, content: \\.content\\}'\\)\nSHA=\\$\\(echo \"\\$CURRENT\" \\| python3 -c \"import sys,json;print\\(json\\.load\\(sys\\.stdin\\)\\['sha'\\]\\)\"\\)\nCONTENT=\\$\\(echo \"\\$CURRENT\" \\| python3 -c \"import sys,json,base64;print\\(base64\\.b64decode\\(json\\.load\\(sys\\.stdin\\)\\['content'\\]\\)\\.decode\\(\\)\\)\"\\)\n\nNEW_CONTENT=\\$\\(echo \"\\$CONTENT\" \\| sed \"s/if: github\\.head_ref == 'test-new-issue-870'/if: github\\.head_ref == 'test-new-issue-870' \\|\\| github\\.head_ref == 'feature\\\\/sync-limit'/\"\\)\n\necho \"\\$NEW_CONTENT\" \\| grep 'if:'\n\nENCODED=\\$\\(echo \"\\$NEW_CONTENT\" \\| base64\\)\ngh api --method PUT repos/chiranjib-swain/labeler-test/contents/\\.github/workflows/labeler\\.yml \\\\\n  --field message=\"test: extend labeler to also fire on feature/sync-limit\" \\\\\n  --field content=\"\\$ENCODED\" \\\\\n  --field sha=\"\\$SHA\" \\\\\n  --jq '\\.commit\\.sha\\[:8\\]'\necho \"labeler\\.yml updated\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
