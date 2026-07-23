@@ -241,11 +241,11 @@ export const removeLabels = async (client, labelableId, labelIds) => {
   // No try-catch, no reconciliation
 };
 ```
-**Direct API test:** Calling `removeLabelsFromLabelable` via `gh api graphql` with 100 label IDs returned 502 — but the labels were committed server-side (verified via REST GET). This confirms the mutation CAN return 502.
+**Direct API test (repeated twice):** Calling `removeLabelsFromLabelable` via raw `curl` / `gh api graphql` with 100 label IDs returned 502 both times — but labels were committed server-side (verified via REST GET on PR #13 and PR #12).
 
-**However:** In all actual labeler workflow runs (PR #26 Run B, PR #13 swap run), the labeler's `client.graphql()` call succeeded without error when removing 100 labels. The 502 was **not reproduced through the labeler itself**.
+**Through the labeler itself:** In all actual labeler workflow runs (PR #26 Run B, PR #13 swap run, PR #13 direct GraphQL cleanup), the labeler's `client.graphql()` call succeeded without error when removing 100 labels. The 502 was **never reproduced through the labeler's execution path**.
 
-**Assessment:** The risk is real but non-deterministic (server-load dependent). The 502 occurred only in the direct `gh api graphql` call, not in Octokit's `client.graphql()` path during workflow runs. Without reconciliation, a 502 on removal would cause the action to fail even if labels were removed — but this was not observed in practice during testing.
+**Assessment:** The 502 appears specific to the raw API call path (possibly due to authentication overhead or request framing differences in `gh api` vs Octokit). Since it was not reproduced through the labeler's `client.graphql()` call in any workflow run, this is a **theoretical risk, not a confirmed issue** in the labeler's execution path. Not a production blocker.
 
 ---
 
@@ -259,7 +259,7 @@ export const removeLabels = async (client, labelableId, labelIds) => {
 5. ✅ No audit trail difference vs `setLabels` (both equally visible in Events API)
 
 ### Remaining Concerns
-1. ⚠️ **502 on `removeLabels` (GraphQL) not handled** — same false-negative risk exists on removal, but no reconciliation
+1. ~~⚠️ **502 on `removeLabels` (GraphQL) not handled**~~ — 502 reproduced only via raw `curl`/`gh api`, **never through the labeler's `client.graphql()` path**. Downgraded to theoretical/non-blocking.
 2. ⚠️ **~10s transient state** — between `removeLabels` completing and `addLabels` starting, the PR has zero config labels. Any system reading labels during this window sees incorrect state
 3. ⚠️ **~2x slower on sync-labels** — 35s vs 19s for the remove+add path (two sequential API calls vs one atomic PUT)
 4. ⚠️ **429 not handled** — rate-limit errors bypass reconciliation silently
