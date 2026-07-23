@@ -111,12 +111,22 @@ export async function labeler() {
       label => labelConfigs.has(label.name) && !allLabels.has(label.name)
     );
 
-    core.info(`[DEBUG] PR #${pullRequest.number} — preexistingLabels (${preexistingLabels.length}): ${preexistingLabels.join(', ')}`);
+    core.info(
+      `[DEBUG] PR #${pullRequest.number} — preexistingLabels (${preexistingLabels.length}): ${preexistingLabels.join(', ')}`
+    );
     core.info(`[DEBUG] allLabels total: ${allLabels.size}`);
-    core.info(`[DEBUG] labelsToApply (${labelsToApply.length}): ${labelsToApply.join(', ')}`);
-    core.info(`[DEBUG] excessLabels (${excessLabels.length}): ${excessLabels.join(', ')}`);
-    core.info(`[DEBUG] newLabels to add (${newLabels.length}): ${newLabels.join(', ')}`);
-    core.info(`[DEBUG] staleLabels to remove (${staleLabels.length}): ${staleLabels.map(l => l.name).join(', ')}`);
+    core.info(
+      `[DEBUG] labelsToApply (${labelsToApply.length}): ${labelsToApply.join(', ')}`
+    );
+    core.info(
+      `[DEBUG] excessLabels (${excessLabels.length}): ${excessLabels.join(', ')}`
+    );
+    core.info(
+      `[DEBUG] newLabels to add (${newLabels.length}): ${newLabels.join(', ')}`
+    );
+    core.info(
+      `[DEBUG] staleLabels to remove (${staleLabels.length}): ${staleLabels.map(l => l.name).join(', ')}`
+    );
 
     try {
       if (staleLabels.length) {
@@ -128,7 +138,9 @@ export async function labeler() {
           );
         }
 
-        core.info(`[DEBUG] Calling removeLabels for ${staleLabels.length} labels, labelableId: ${labelableId}`);
+        core.info(
+          `[DEBUG] Calling removeLabels for ${staleLabels.length} labels, labelableId: ${labelableId}`
+        );
         try {
           await api.removeLabels(
             client,
@@ -137,7 +149,9 @@ export async function labeler() {
           );
           core.info(`[DEBUG] removeLabels succeeded`);
         } catch (error: any) {
-          core.info(`[DEBUG] removeLabels failed — status: ${error.status}, message: ${error.message}`);
+          core.info(
+            `[DEBUG] removeLabels failed — status: ${error.status}, message: ${error.message}`
+          );
           throw new Error(
             `Failed to remove configured labels '${staleLabels.map(label => label.name).join("', '")}' from PR #${pullRequest.number}`,
             {cause: error}
@@ -154,8 +168,12 @@ export async function labeler() {
       }
     } catch (error: any) {
       const apiError = error.cause ?? error;
-      core.info(`[DEBUG] Caught error — name: ${apiError.name}, status: ${apiError.status}, message: ${apiError.message}`);
-      core.info(`[DEBUG] Full error: ${JSON.stringify(apiError, Object.getOwnPropertyNames(apiError))}`);
+      core.info(
+        `[DEBUG] Caught error — name: ${apiError.name}, status: ${apiError.status}, message: ${apiError.message}`
+      );
+      core.info(
+        `[DEBUG] Full error: ${JSON.stringify(apiError, Object.getOwnPropertyNames(apiError))}`
+      );
       if (
         apiError.name === 'HttpError' &&
         apiError.status === 403 &&

@@ -1,0 +1,66 @@
+name: "[Test 3] Manual label preserved with sync-labels: true"
+
+# Verifies: with sync-labels:true, stale config labels are removed but manually-added
+# non-config labels are preserved. PR #957 guarantee: removeLabels only targets labels
+# that are IN the config AND no longer match — never touches labels outside the config.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: "PR number (must already have a non-config manual label e.g. 'question')"
+        required: true
+      manual-label:
+        description: "Name of the manual label to verify is preserved"
+        required: true
+        default: "question"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  test3:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Step 1 — confirm manual label is present before run"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ inputs.pr-number }}')
+            });
+            const names = labels.map(l => l.name);
+            console.log('Labels before run:', names.join(', '));
+            if (!names.includes('${{ inputs.manual-label }}')) {
+              core.setFailed('Manual label "${{ inputs.manual-label }}" is NOT on the PR. Add it manually first.');
+            } else {
+              console.log('✓ Manual label present before run');
+            }
+
+      - name: "Step 2 — run labeler with sync-labels:true (pr-957 branch)"
+        uses: chiranjib-swain/labeler@pr-957
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ inputs.pr-number }}
+          sync-labels: true
+
+      - name: "Step 3 — verify manual label survived sync-labels:true"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ inputs.pr-number }}')
+            });
+            const names = labels.map(l => l.name);
+            console.log('Labels after run:', names.join(', '));
+            if (!names.includes('${{ inputs.manual-label }}')) {
+              core.setFailed('FAIL — Manual label "${{ inputs.manual-label }}" was REMOVED by sync-labels:true. PR #957 broke label preservation.');
+            } else {
+              console.log('PASS — Manual label preserved even with sync-labels:true.');
+            }

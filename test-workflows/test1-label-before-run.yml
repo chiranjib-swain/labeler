@@ -1,0 +1,65 @@
+name: "[Test 1] Manual label added BEFORE labeler run"
+
+# Verifies: a label manually added before the action runs is preserved after it completes.
+# PR #957 guarantee: addLabels only adds new config-matched labels → never removes manual labels.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: "PR number to test on (must already have a manual label e.g. 'question')"
+        required: true
+      manual-label:
+        description: "Name of the manual label already on the PR"
+        required: true
+        default: "question"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  test1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Step 1 — confirm manual label is present before run"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ inputs.pr-number }}')
+            });
+            const names = labels.map(l => l.name);
+            console.log('Labels before run:', names.join(', '));
+            if (!names.includes('${{ inputs.manual-label }}')) {
+              core.setFailed('Manual label "${{ inputs.manual-label }}" is NOT on the PR before run. Add it first.');
+            } else {
+              console.log('✓ Manual label present before run');
+            }
+
+      - name: "Step 2 — run labeler (pr-957 branch)"
+        uses: chiranjib-swain/labeler@pr-957
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ inputs.pr-number }}
+          sync-labels: false
+
+      - name: "Step 3 — verify manual label is still present after run"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ inputs.pr-number }}')
+            });
+            const names = labels.map(l => l.name);
+            console.log('Labels after run:', names.join(', '));
+            if (!names.includes('${{ inputs.manual-label }}')) {
+              core.setFailed('FAIL — Manual label "${{ inputs.manual-label }}" was LOST after labeler ran.');
+            } else {
+              console.log('PASS — Manual label preserved after labeler run.');
+            }

@@ -1,0 +1,66 @@
+name: "[Test 4] setLabels race — manual label lost (main branch regression demo)"
+
+# Demonstrates the OLD bug that PR #917 fixed and PR #957 re-addresses differently.
+# With setLabels (main branch) WITHOUT a re-fetch, a label added BETWEEN fetch and
+# setLabels is lost. This workflow adds a label, runs the MAIN branch labeler, and
+# checks whether the manually added label survives.
+#
+# NOTE: To reliably reproduce the race, add the label to the PR manually DURING the
+# labeler run (while it is sleeping, if LABELER_DEBUG_DELAY_BEFORE_SET_MS is set),
+# or add it before triggering and observe if setLabels overwrites the full snapshot.
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: "PR number to test on"
+        required: true
+      manual-label:
+        description: "Name of the label to add before the run (should be at risk of being lost)"
+        required: true
+        default: "question"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  test4-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Step 1 — add manual label to PR"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ inputs.pr-number }}'),
+              labels: ['${{ inputs.manual-label }}']
+            });
+            console.log('Added manual label: ${{ inputs.manual-label }}');
+
+      - name: "Step 2 — run labeler from MAIN branch (setLabels path)"
+        uses: actions/labeler@main
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ inputs.pr-number }}
+          sync-labels: true
+
+      - name: "Step 3 — check if manual label survived"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: Number('${{ inputs.pr-number }}')
+            });
+            const names = labels.map(l => l.name);
+            console.log('Labels after main-branch run:', names.join(', '));
+            if (!names.includes('${{ inputs.manual-label }}')) {
+              console.log('DEMONSTRATED — Manual label was LOST (old setLabels behavior).');
+            } else {
+              console.log('Label survived (main branch preserved it via re-fetch or it was in the snapshot).');
+            }
