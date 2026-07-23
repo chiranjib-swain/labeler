@@ -18,7 +18,10 @@ PR #957 ("Preserve externally managed labels during synchronization") replaces t
 | Remove stale labels | `setLabels` PUT (replaces all) | `removeLabelsFromLabelable` GraphQL |
 | Atomicity | Single call | Two sequential calls |
 | Idempotent | ✅ Yes (PUT) | ❌ No (POST) |
-| Retries on error | Default Octokit retries | `retries: 0` |
+| Retries on error | ✅ Default Octokit retry plugin (backs up transient failures) | ❌ `retries: 0` on POST (disabled to prevent duplicate writes) |
+| 5xx stability | Higher — PUT + retries rarely fails permanently | Lower — POST with no retries; 502 on 75+ labels confirmed |
+
+**Note on retries:** `setLabels` (PUT) is idempotent — retrying it on a 5xx is safe because calling it twice produces the same result. PR #957 cannot enable retries on `addLabels` (POST) because POST is non-idempotent — retrying a committed-but-502'd POST would add duplicate labels. This is the fundamental trade-off: the retry plugin that makes main's approach resilient cannot be used safely with the POST-based approach.
 
 **Stated goal:** Preserve manually-added labels that are not in the labeler config, which `setLabels` would overwrite.
 
@@ -136,10 +139,11 @@ Both labeler versions triggered at **06:57:59 UTC** simultaneously on separate P
 - Empirically confirmed: run `29831044874` — 75 labels applied, 502 returned
 
 ### On `removeLabelsFromLabelable` (GraphQL) — pr-957
-- Removing 100 labels via GraphQL mutation → GitHub returns 502
-- **Labels are removed server-side despite the 502**
+- Direct `gh api graphql` call removing 100 labels → returned 502
+- **Labels were removed server-side despite the 502** (confirmed via REST GET)
 - `remove-labels.ts` has **no error handling or reconciliation** for this case
-- Tested manually: 100 labels removed despite 502 on `PR_kwDOOyc1qM6jadbi`
+- **However:** Actual labeler workflow runs (PR #26 Run B, PR #13 swap) removed 100 labels via `client.graphql()` successfully with no 502 — the failure was not reproduced through the labeler itself
+- Risk is non-deterministic (server-load dependent), not a confirmed regression in the labeler's execution path
 
 ### On `setLabels` (PUT) — main
 - Reliable up to 100 labels in our testing
@@ -237,7 +241,11 @@ export const removeLabels = async (client, labelableId, labelIds) => {
   // No try-catch, no reconciliation
 };
 ```
-The GraphQL mutation also returns 502 when removing 100 labels (empirically confirmed), but `remove-labels.ts` has no reconciliation. If the mutation returns 502, the action throws — even though the removal may have been committed.
+**Direct API test:** Calling `removeLabelsFromLabelable` via `gh api graphql` with 100 label IDs returned 502 — but the labels were committed server-side (verified via REST GET). This confirms the mutation CAN return 502.
+
+**However:** In all actual labeler workflow runs (PR #26 Run B, PR #13 swap run), the labeler's `client.graphql()` call succeeded without error when removing 100 labels. The 502 was **not reproduced through the labeler itself**.
+
+**Assessment:** The risk is real but non-deterministic (server-load dependent). The 502 occurred only in the direct `gh api graphql` call, not in Octokit's `client.graphql()` path during workflow runs. Without reconciliation, a 502 on removal would cause the action to fail even if labels were removed — but this was not observed in practice during testing.
 
 ---
 
@@ -255,7 +263,7 @@ The GraphQL mutation also returns 502 when removing 100 labels (empirically conf
 2. ⚠️ **~10s transient state** — between `removeLabels` completing and `addLabels` starting, the PR has zero config labels. Any system reading labels during this window sees incorrect state
 3. ⚠️ **~2x slower on sync-labels** — 35s vs 19s for the remove+add path (two sequential API calls vs one atomic PUT)
 4. ⚠️ **429 not handled** — rate-limit errors bypass reconciliation silently
-5. ⚠️ **Reverts PR #497's approach** — PR #497 introduced `setLabels` specifically to avoid the POST reliability issues at scale. PR #957 reintroduces those failure modes for the `sync-labels: true` path, mitigated only by reconciliation
+5. ⚠️ **Reverts PR #497's approach** — PR #497 introduced `setLabels` (PUT) specifically to avoid the POST reliability issues at scale. `setLabels` benefits from Octokit's default retry plugin, which safely retries transient 5xx failures because PUT is idempotent. PR #957 cannot use retries on POST (non-idempotent), so it substitutes post-hoc reconciliation instead — which adds complexity and a second API call on every 5xx path.
 
 ### What Was Disproved / Withdrawn
 - ~~`per_page: 100` pagination bug in reconciliation~~ — closed by 100-label cap
