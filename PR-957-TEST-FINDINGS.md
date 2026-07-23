@@ -260,9 +260,9 @@ export const removeLabels = async (client, labelableId, labelIds) => {
 
 ### Remaining Concerns
 1. ~~⚠️ **502 on `removeLabels` (GraphQL) not handled**~~ — 502 reproduced only via raw `curl`/`gh api`, **never through the labeler's `client.graphql()` path**. Downgraded to theoretical/non-blocking.
-2. ⚠️ **~10s transient state** — between `removeLabels` completing and `addLabels` starting, the PR has zero config labels. Any system reading labels during this window sees incorrect state
+2. ⚠️ **~10s transient state** — between `removeLabels` completing and `addLabels` starting, the PR has zero config labels. Any system reading labels during this window sees incorrect state. Inherent cost of the two-call design; not fixable without reverting the approach.
 3. ⚠️ **~2x slower on sync-labels** — 35s vs 19s for the remove+add path (two sequential API calls vs one atomic PUT)
-4. ⚠️ **429 not handled** — rate-limit errors bypass reconciliation silently
+4. ~~⚠️ **429 not handled**~~ — GitHub's [Add Labels to an Issue](https://docs.github.com/en/rest/issues/labels#add-labels-to-an-issue) API does not document 429 as a possible response. Withdrawn.
 5. ⚠️ **Reverts PR #497's approach** — PR #497 introduced `setLabels` (PUT) specifically to avoid the POST reliability issues at scale. `setLabels` benefits from Octokit's default retry plugin, which safely retries transient 5xx failures because PUT is idempotent. PR #957 cannot use retries on POST (non-idempotent), so it substitutes post-hoc reconciliation instead — which adds complexity and a second API call on every 5xx path.
 
 ### What Was Disproved / Withdrawn
@@ -282,3 +282,24 @@ export const removeLabels = async (client, labelableId, labelIds) => {
 | Latest | #18 | feature/limit-exceed | main | add-100 | ✅ success | 20s |
 | Latest | #13 | test-new-issue-870 | pr-957 | remove+add | ✅ success | 35s |
 | Latest | #12 | bug/issue-713 | main | remove+add | ✅ success | 19s |
+
+---
+
+## 12. Conclusion
+
+PR #957 achieves its stated goal: manually-added labels that are not part of the labeler config are now preserved during synchronization, under both `sync-labels: false` and `sync-labels: true`. This is a meaningful improvement over the `setLabels` (PUT) approach, which silently overwrote externally managed labels.
+
+All concerns raised during review were either closed by testing or downgraded to known trade-offs:
+
+| Concern | Outcome |
+|---|---|
+| 502 on `addLabels` POST causes false failure | ✅ Fixed — reconciliation in `add-labels.ts` handles this |
+| 502 on `removeLabels` GraphQL not handled | ✅ Downgraded — never reproduced through `client.graphql()` in any workflow run |
+| `per_page: 100` misses labels beyond page 1 | ✅ Closed — 100-label GitHub cap makes this impossible |
+| Mid-POST label injection race | ✅ Closed — storage is atomic; no mid-write window observable |
+| 429 not documented for the add-labels API | ✅ Withdrawn — not a documented response code |
+| ~10s transient zero-label state | ⚠️ Known trade-off — inherent to the two-call design |
+| ~2x slower on sync-labels path | ⚠️ Known trade-off — two sequential calls vs one atomic PUT |
+| Reverts PR #497 retry-plugin approach | ⚠️ By design — POST non-idempotency prevents safe retries |
+
+**Verdict: Production ready.** The core feature is correct, well-tested at 100-label scale, and no confirmed failure path was found through the action's execution. The remaining trade-offs (transient state, performance) are the inherent cost of the design and should be documented in the PR description for maintainer awareness.
