@@ -85,13 +85,26 @@ label-101:
 - Commit A: touch `app/**` file → labeler applies 100 app labels  
 - Commit B: reset `app/**` to match main, touch `src/**` → labeler removes 100 and applies 100 new  
 
-**PR #26 (pr-957) Event Timeline:**
+**PR #26 (pr-957) Event Timeline — Run B (06:21 UTC):**
 ```
 06:20:17–06:20:22  labeled    100 labels (Run A — app labels added)
 06:21:28–06:21:30  unlabeled  100 labels (Run B — removed via GraphQL)
 06:21:40–06:21:45  labeled    100 labels (Run B — src labels added)
 Gap between remove and add: ~10 seconds (transient state: 0 labels on PR)
 ```
+
+**PR #26 (pr-957) Cross-Verification Run (13:44 UTC) — polled via `listLabelsOnIssue?per_page=100` every ~3s:**
+```
+Labeler step start:  13:45:00
+13:45:05  100 labels  (label-101..200 — removal not yet started)
+13:45:10    0 labels  ← TRANSIENT ZERO-LABEL STATE BEGINS
+13:45:14    0 labels
+13:45:17    0 labels
+13:45:21  100 labels  (label-001..100 — add complete)
+Labeler step end:    13:45:26  (total: 26s action step / 37s job)
+Zero-label window: ~11 seconds (13:45:10 → 13:45:21)
+```
+Workflow run: `30012576182` — conclusion: success
 
 **PR #18 (main) Event Timeline:**
 ```
