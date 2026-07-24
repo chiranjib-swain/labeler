@@ -275,8 +275,20 @@ export const removeLabels = async (client, labelableId, labelIds) => {
 1. ~~⚠️ **502 on `removeLabels` (GraphQL) not handled**~~ — 502 reproduced only via raw `curl`/`gh api`, **never through the labeler's `client.graphql()` path**. Downgraded to theoretical/non-blocking.
 2. ⚠️ **~10s transient state** — between `removeLabels` completing and `addLabels` starting, the PR has zero config labels. Inherent cost of the two-call design; not fixable without reverting the approach.
    - **Read consistency:** Any webhook listener, CI pipeline gating on labels, or dashboard reading labels during this window sees incorrect state (zero labels). For most teams this is a non-issue.
-   - **422 risk (near cap):** If anything injects a label during this window (another bot, a concurrent workflow, a manual add), the PR label count becomes 1 when `addLabels` fires. If the config has ~100 labels, the total exceeds the 100-label cap → GitHub returns 422. Since 422 is a client error (`status < 500`), `isServerError` does not catch it — the labeler **throws and fails**, leaving the PR with 0 config labels. The ~11s window is ~4x larger than `setLabels`' ~3s window, making this proportionally more likely. Risk is highest for repos with 80+ config labels and concurrent auto-labeling integrations.
+   - **422 risk (near cap) — CONFIRMED via live test (run `30067489415`):** If anything injects a label during the zero-label window, the PR label count increases by 1 when `addLabels` fires. With 100 config labels and 1 already injected, GitHub silently truncates at the 100-label cap — applying 99 of the 100 config labels and returning **502** (not 422 as might be expected). Reconciliation in `add-labels.ts` then performs a GET and correctly detects that `label-100` is missing → `labels.every(...)` returns false → re-throws the 502 → **labeler reports failure**. Final state: PR has `question` + label-001..099 = 100 labels — `label-100` missing, PR in inconsistent state. The ~11s window is ~4x larger than `setLabels`' ~3s window, making this proportionally more likely. **Risk threshold: `config_labels + concurrent_injections > 100`.** At 100 config labels, a single external injection breaches the cap. At 80 config labels, 21 simultaneous injections would be needed — practically impossible. The failure mode is **only realistic at or very near 100 config labels**, which is already an extreme configuration that leaves zero headroom for any external labels regardless of the swap window.
+     ```
+     04:42:31  removeLabels started (100 stale labels)
+     04:42:44  removeLabels succeeded ← zero-label window opens
+     04:42:44  addLabels POST started (100 labels)
+     04:42:45  'question' injected via API ← during addLabels in-flight
+     04:42:55  addLabels returns 502 — label-100 silently dropped at GitHub cap
+               reconciliation GET: question + label-001..099 present, label-100 missing
+               labels.every(...) = false → re-throws 502
+     Labeler conclusion: FAILURE — HttpError: Server Error
+     Final PR state: 100 labels (question + label-001..099) — label-100 missing
+     ```
 3. ⚠️ **~2x slower on sync-labels** — 35s vs 19s for the remove+add path (two sequential API calls vs one atomic PUT)
+6. ⚠️ **Transient state behavior not documented in README** — the ~10s zero-label window and the cap-breach edge case are design trade-offs that users cannot reasonably anticipate from the current documentation. A user at 100 config labels who sees `HttpError: Server Error` on a label swap has no way to understand why. The README should document: (a) that a zero-label window exists during sync-labels swaps, (b) that a re-run resolves any inconsistent state, and (c) that repos at the 100-label cap with concurrent auto-labeling integrations should be aware of the interaction.
 4. ~~⚠️ **429 not handled**~~ — GitHub's [Add Labels to an Issue](https://docs.github.com/en/rest/issues/labels#add-labels-to-an-issue) API does not document 429 as a possible response. Withdrawn.
 5. ⚠️ **Reverts PR #497's approach** — PR #497 introduced `setLabels` (PUT) specifically to avoid the POST reliability issues at scale. `setLabels` benefits from Octokit's default retry plugin, which safely retries transient 5xx failures because PUT is idempotent. PR #957 cannot use retries on POST (non-idempotent), so it substitutes post-hoc reconciliation instead — which adds complexity and a second API call on every 5xx path.
 
@@ -296,6 +308,7 @@ export const removeLabels = async (client, labelableId, labelIds) => {
 | Latest | #26 | feature/sync-limit | pr-957 | add-100 | ✅ success | 18s |
 | Latest | #18 | feature/limit-exceed | main | add-100 | ✅ success | 20s |
 | Latest | #13 | test-new-issue-870 | pr-957 | remove+add | ✅ success | 35s |
+| 30067489415 | #13 | test-new-issue-870 | pr-957 | 422-injection: label injected during zero-label window | ❌ failure (502, label-100 missing) | 32s |
 | Latest | #12 | bug/issue-713 | main | remove+add | ✅ success | 19s |
 
 ---
@@ -314,7 +327,13 @@ All concerns raised during review were either closed by testing or downgraded to
 | Mid-POST label injection race | ✅ Closed — storage is atomic; no mid-write window observable |
 | 429 not documented for the add-labels API | ✅ Withdrawn — not a documented response code |
 | ~10s transient zero-label state | ⚠️ Known trade-off — inherent to the two-call design |
+| Cap-breach on injection during zero-label window | ⚠️ Confirmed edge case — only at 100 config labels; re-run fixes state |
 | ~2x slower on sync-labels path | ⚠️ Known trade-off — two sequential calls vs one atomic PUT |
 | Reverts PR #497 retry-plugin approach | ⚠️ By design — POST non-idempotency prevents safe retries |
+| Transient state behavior undocumented in README | ⚠️ Should be documented before shipping |
 
-**Verdict: Production ready.** The core feature is correct, well-tested at 100-label scale, and no confirmed failure path was found through the action's execution. The remaining trade-offs (transient state, performance) are the inherent cost of the design and should be documented in the PR description for maintainer awareness.
+**Verdict: Production ready, with one recommended action before merge.**
+
+The core feature is correct, well-tested at 100-label scale, and no confirmed failure path was found through the action's execution for typical use cases. The remaining trade-offs are inherent to the two-call design and acceptable.
+
+**Recommended before merge:** Update the README to document the transient zero-label behavior during `sync-labels` swaps. Users who encounter a `Server Error` on a label swap — particularly at the 100-label cap — need to understand that: (a) a ~10s window exists where the PR has zero config labels, (b) an external label added during that window can cause a cap breach and labeler failure, and (c) a re-run fully resolves the state. Without this documentation, the failure is opaque and difficult to diagnose.
