@@ -190,7 +190,9 @@ HTTP 422: "Validation Failed. Issues cannot have more than 100 labels"
 ```
 Triggered when our polling script attempted to inject `question` while PR already had 100 labels.
 
-**Key finding:** GitHub enforces a hard 100-label cap per issue/PR at the API level. There is no official documentation for this limit — it is enforced implicitly via 422 responses and server-side behaviour.
+**Key finding:** GitHub enforces a hard 100-label cap per issue/PR at the REST write layer — adding a label to a PR that already has 100 fails with 422. However, **the REST GET response also has a hard 100-item cap**: `GET /issues/{n}/labels` returns at most 100 labels regardless of `per_page`. At 101 labels stored (possible when a committed POST write races a concurrent injection), the REST response overflows to a second page that single-page consumers never read. Confirmed via GraphQL: PR #13 has 101 labels (`totalCount: 101`, `pageInfo.hasNextPage: true`); `label-100` is on page 2 and is invisible to a single REST GET call. The GitHub UI (which reads from GraphQL) correctly shows 101; the REST API appears to show 100.
+
+**Additional note:** GitHub's UI label count is NOT stale cache — it reads from GraphQL and is accurate. The REST API's 100-item hard cap per response is the source of discrepancy, not caching.
 
 ---
 
@@ -275,17 +277,20 @@ export const removeLabels = async (client, labelableId, labelIds) => {
 1. ~~⚠️ **502 on `removeLabels` (GraphQL) not handled**~~ — 502 reproduced only via raw `curl`/`gh api`, **never through the labeler's `client.graphql()` path**. Downgraded to theoretical/non-blocking.
 2. ⚠️ **~10s transient state** — between `removeLabels` completing and `addLabels` starting, the PR has zero config labels. Inherent cost of the two-call design; not fixable without reverting the approach.
    - **Read consistency:** Any webhook listener, CI pipeline gating on labels, or dashboard reading labels during this window sees incorrect state (zero labels). For most teams this is a non-issue.
-   - **422 risk (near cap) — CONFIRMED via live test (run `30067489415`):** If anything injects a label during the zero-label window, the PR label count increases by 1 when `addLabels` fires. With 100 config labels and 1 already injected, GitHub silently truncates at the 100-label cap — applying 99 of the 100 config labels and returning **502** (not 422 as might be expected). Reconciliation in `add-labels.ts` then performs a GET and correctly detects that `label-100` is missing → `labels.every(...)` returns false → re-throws the 502 → **labeler reports failure**. Final state: PR has `question` + label-001..099 = 100 labels — `label-100` missing, PR in inconsistent state. The ~11s window is ~4x larger than `setLabels`' ~3s window, making this proportionally more likely. **Risk threshold: `config_labels + concurrent_injections > 100`.** At 100 config labels, a single external injection breaches the cap. At 80 config labels, 21 simultaneous injections would be needed — practically impossible. The failure mode is **only realistic at or very near 100 config labels**, which is already an extreme configuration that leaves zero headroom for any external labels regardless of the swap window.
+   - **Cap-breach injection — CONFIRMED via live test (run `30067489415`):** If anything injects a label during the zero-label window, the PR label count increases by 1 when `addLabels` fires. With 100 config labels and 1 already injected, GitHub returns **502** on the POST — but all 100 config labels are actually written (committed write, transient server error). `question` was already present, so the PR now has 101 labels stored. **Corrected failure mechanism (confirmed via GraphQL pagination post-hoc):** GitHub's REST `GET /issues/{n}/labels` has a hard 100-item response cap regardless of `per_page`. With 101 labels stored, `label-100` overflows onto REST page 2, which the reconciliation never reads. The single-page GET returns `question` + `label-001..099` = 100 labels — `label-100` appears absent. `labels.every(...)` returns false → re-throws the 502 → **labeler reports failure**. Actual storage state: all 101 labels present (verified via GraphQL `totalCount: 101`, `pageInfo.hasNextPage: true`, `label-100` on page 2). The ~11s window is ~4x larger than `setLabels`' ~3s window, making this proportionally more likely. **Risk threshold: `config_labels + concurrent_injections > 100`.** At 100 config labels, a single external injection triggers this path. At 80 config labels, 21 simultaneous injections would be needed — practically impossible. The failure mode is **only realistic at or very near 100 config labels**, which is already an extreme configuration.
      ```
      04:42:31  removeLabels started (100 stale labels)
      04:42:44  removeLabels succeeded ← zero-label window opens
      04:42:44  addLabels POST started (100 labels)
      04:42:45  'question' injected via API ← during addLabels in-flight
-     04:42:55  addLabels returns 502 — label-100 silently dropped at GitHub cap
-               reconciliation GET: question + label-001..099 present, label-100 missing
+     04:42:55  addLabels returns 502 (write committed: all 100 config labels stored)
+               PR now has 101 labels: question + label-001..100
+               reconciliation GET (?per_page=100): returns only 100 (REST hard cap)
+               REST page 1: question + label-001..099 — label-100 on page 2 (not read)
                labels.every(...) = false → re-throws 502
      Labeler conclusion: FAILURE — HttpError: Server Error
-     Final PR state: 100 labels (question + label-001..099) — label-100 missing
+     Actual storage: 101 labels — question + label-001..100 (all present, confirmed via GraphQL)
+     REST API blind spot: single-page GET misses label-100 (overflows to page 2)
      ```
 3. ⚠️ **~2x slower on sync-labels** — 35s vs 19s for the remove+add path (two sequential API calls vs one atomic PUT)
 6. ⚠️ **Transient state behavior not documented in README** — the ~10s zero-label window and the cap-breach edge case are design trade-offs that users cannot reasonably anticipate from the current documentation. A user at 100 config labels who sees `HttpError: Server Error` on a label swap has no way to understand why. The README should document: (a) that a zero-label window exists during sync-labels swaps, (b) that a re-run resolves any inconsistent state, and (c) that repos at the 100-label cap with concurrent auto-labeling integrations should be aware of the interaction.
@@ -296,6 +301,7 @@ export const removeLabels = async (client, labelableId, labelIds) => {
 - ~~`per_page: 100` pagination bug in reconciliation~~ — closed by 100-label cap
 - ~~GraphQL mutation leaves no audit trail~~ — closed by Events API verification  
 - ~~Mid-POST external label injection is reproducible~~ — closed by atomic storage test
+- ~~GitHub UI showing 101 labels is stale cache~~ — UI reads from GraphQL and is correct; the discrepancy is the REST GET 100-item hard response cap (confirmed via GraphQL pagination: `totalCount: 101`, `pageInfo.hasNextPage: true`, `label-100` on page 2)
 
 ---
 
@@ -308,7 +314,7 @@ export const removeLabels = async (client, labelableId, labelIds) => {
 | Latest | #26 | feature/sync-limit | pr-957 | add-100 | ✅ success | 18s |
 | Latest | #18 | feature/limit-exceed | main | add-100 | ✅ success | 20s |
 | Latest | #13 | test-new-issue-870 | pr-957 | remove+add | ✅ success | 35s |
-| 30067489415 | #13 | test-new-issue-870 | pr-957 | 422-injection: label injected during zero-label window | ❌ failure (502, label-100 missing) | 32s |
+| 30067489415 | #13 | test-new-issue-870 | pr-957 | cap-breach injection: label injected during zero-label window | ❌ failure (502; label-100 on REST page 2, not read by reconciliation) | 32s |
 | Latest | #12 | bug/issue-713 | main | remove+add | ✅ success | 19s |
 
 ---
