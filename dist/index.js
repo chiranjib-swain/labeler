@@ -38031,9 +38031,9 @@ const addLabels = async (client, prNumber, labels) => {
         if (!isServerError(error)) {
             throw error;
         }
-        let allCurrentLabels;
+        let currentLabels;
         try {
-            allCurrentLabels = await client.paginate(client.rest.issues.listLabelsOnIssue, {
+            currentLabels = await client.rest.issues.listLabelsOnIssue({
                 ...request,
                 per_page: 100,
                 request: { retries: 0 }
@@ -38042,7 +38042,7 @@ const addLabels = async (client, prNumber, labels) => {
         catch {
             throw error;
         }
-        const currentLabelNames = new Set(allCurrentLabels.map(label => label.name.toLowerCase()));
+        const currentLabelNames = new Set(currentLabels.data.map(label => label.name.toLowerCase()));
         if (labels.every(label => currentLabelNames.has(label.toLowerCase()))) {
             return;
         }

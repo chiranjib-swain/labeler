@@ -31,22 +31,19 @@ export const addLabels = async (
       throw error;
     }
 
-    let allCurrentLabels;
+    let currentLabels;
     try {
-      allCurrentLabels = await client.paginate(
-        client.rest.issues.listLabelsOnIssue,
-        {
-          ...request,
-          per_page: 100,
-          request: {retries: 0}
-        }
-      );
+      currentLabels = await client.rest.issues.listLabelsOnIssue({
+        ...request,
+        per_page: 100,
+        request: {retries: 0}
+      });
     } catch {
       throw error;
     }
 
     const currentLabelNames = new Set(
-      allCurrentLabels.map(label => label.name.toLowerCase())
+      currentLabels.data.map(label => label.name.toLowerCase())
     );
     if (labels.every(label => currentLabelNames.has(label.toLowerCase()))) {
       return;
