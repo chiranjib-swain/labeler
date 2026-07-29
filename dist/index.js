@@ -38008,6 +38008,7 @@ retry.VERSION = plugin_retry_dist_bundle_VERSION;
 
 ;// CONCATENATED MODULE: ./lib/api/add-labels.js
 
+
 const isServerError = (error) => typeof error === 'object' &&
     error !== null &&
     'status' in error &&
@@ -38027,6 +38028,7 @@ const addLabels = async (client, prNumber, labels) => {
             request: { retries: 0 }
         });
         if (process.env.SIMULATE_5XX === 'true') {
+            info(`[SIMULATE_5XX] REST POST succeeded — throwing fake 502 to trigger reconciliation`);
             throw Object.assign(new Error('Simulated Bad Gateway'), { status: 502 });
         }
     }
@@ -38034,23 +38036,29 @@ const addLabels = async (client, prNumber, labels) => {
         if (!isServerError(error)) {
             throw error;
         }
+        info(`[reconcile] Server error caught (status: ${error.status}) — starting paginated label verification for ${labels.length} labels`);
         const currentLabelNames = new Set();
         let page = 1;
         try {
             while (true) {
+                const perPage = process.env.SIMULATE_5XX === 'true' ? 10 : 100;
                 const currentLabels = await client.rest.issues.listLabelsOnIssue({
                     ...request,
-                    per_page: process.env.SIMULATE_5XX === 'true' ? 10 : 100,
+                    per_page: perPage,
                     page,
                     request: { retries: 0 }
                 });
                 for (const label of currentLabels.data) {
                     currentLabelNames.add(label.name.toLowerCase());
                 }
+                const hasNext = !!currentLabels.headers.link?.match(/;\s*rel="next"/);
+                info(`[reconcile] Page ${page}: fetched ${currentLabels.data.length} labels (cumulative: ${currentLabelNames.size}) hasNext=${hasNext}`);
                 if (labels.every(label => currentLabelNames.has(label.toLowerCase()))) {
+                    info(`[reconcile] All ${labels.length} requested labels confirmed present — returning success`);
                     return;
                 }
-                if (!currentLabels.headers.link?.match(/;\s*rel="next"/)) {
+                if (!hasNext) {
+                    info(`[reconcile] No more pages — ${labels.length - [...labels].filter(l => currentLabelNames.has(l.toLowerCase())).length} label(s) still missing — throwing original error`);
                     break;
                 }
                 page++;
