@@ -38026,6 +38026,9 @@ const addLabels = async (client, prNumber, labels) => {
             labels,
             request: { retries: 0 }
         });
+        if (process.env.SIMULATE_5XX === 'true') {
+            throw Object.assign(new Error('Simulated Bad Gateway'), { status: 502 });
+        }
     }
     catch (error) {
         if (!isServerError(error)) {
@@ -38037,7 +38040,7 @@ const addLabels = async (client, prNumber, labels) => {
             while (true) {
                 const currentLabels = await client.rest.issues.listLabelsOnIssue({
                     ...request,
-                    per_page: 100,
+                    per_page: process.env.SIMULATE_5XX === 'true' ? 10 : 100,
                     page,
                     request: { retries: 0 }
                 });

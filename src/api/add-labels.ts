@@ -26,6 +26,9 @@ export const addLabels = async (
       labels,
       request: {retries: 0}
     });
+    if (process.env.SIMULATE_5XX === 'true') {
+      throw Object.assign(new Error('Simulated Bad Gateway'), {status: 502});
+    }
   } catch (error: unknown) {
     if (!isServerError(error)) {
       throw error;
@@ -37,7 +40,7 @@ export const addLabels = async (
       while (true) {
         const currentLabels = await client.rest.issues.listLabelsOnIssue({
           ...request,
-          per_page: 100,
+          per_page: process.env.SIMULATE_5XX === 'true' ? 10 : 100,
           page,
           request: {retries: 0}
         });
